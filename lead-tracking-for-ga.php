@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: Lead Tracking for Google Analytics
-Description: A simple plugin to inject custom JavaScript for lead tracking.
+Description:Add Meta Pixel with Conversion Google Analytics (GA4) + Consent Mode, Google Tag Manager, and Head & Footer scripts. A plugin to inject custom JavaScript for lead tracking.
 Version: 1.0
 Author: shaun palmer
 */
