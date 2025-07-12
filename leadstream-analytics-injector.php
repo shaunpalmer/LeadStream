@@ -52,62 +52,70 @@ function leadstream_analytics_settings_display() {
                 settings_fields('lead-tracking-js-settings-group');
                 do_settings_sections('lead-tracking-js-settings-group');
             ?>
-            <div style="margin-bottom: 18px;">
+            <div class="ls-toggle-group">
                 <label class="ls-toggle-switch">
+                    <input type="hidden" name="leadstream_inject_header" value="0">
                     <input type="checkbox" name="leadstream_inject_header" id="leadstream_inject_header" value="1" <?php checked(1, get_option('leadstream_inject_header', 1)); ?>>
                     <span class="ls-slider"></span>
-                    Inject in Header
+                    <span class="ls-label">in Header</span>
                 </label>
                 <label class="ls-toggle-switch">
+                    <input type="hidden" name="leadstream_inject_footer" value="0">
                     <input type="checkbox" name="leadstream_inject_footer" id="leadstream_inject_footer" value="1" <?php checked(1, get_option('leadstream_inject_footer', 1)); ?>>
                     <span class="ls-slider"></span>
-                    Inject in Footer
+                    <span class="ls-label">in Footer</span>
                 </label>
             </div>
             <?php submit_button('Save JavaScript'); ?>
         </form>
         <style>
+        .ls-toggle-group {
+          display: flex;
+          gap: 32px;
+          margin-bottom: 24px;
+          align-items: center;
+        }
         .ls-toggle-switch {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 1.1em;
+          margin-bottom: 0;
+          padding-bottom: 0;
+        }
+        .ls-slider {
           position: relative;
           display: inline-block;
           width: 56px;
           height: 28px;
-          margin-right: 12px;
-          vertical-align: middle;
-          user-select: none;
-        }
-        .ls-toggle-switch input {
-          opacity: 0;
-          width: 0;
-          height: 0;
-        }
-        .ls-slider {
-          position: absolute;
-          cursor: pointer;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
           background-color: #ccc;
-          transition: .4s;
           border-radius: 34px;
+          transition: background 0.3s;
         }
         .ls-toggle-switch input:checked + .ls-slider {
           background-color: #27ae60;
         }
         .ls-slider:before {
-          position: absolute;
           content: "";
-          height: 20px;
-          width: 20px;
+          position: absolute;
           left: 4px;
           bottom: 4px;
-          background-color: white;
-          transition: .4s;
+          width: 20px;
+          height: 20px;
+          background: white;
           border-radius: 50%;
+          transition: transform 0.3s;
         }
         .ls-toggle-switch input:checked + .ls-slider:before {
           transform: translateX(28px);
+        }
+        .ls-toggle-switch input {
+          display: none;
+        }
+        .ls-label {
+          margin-left: 12px;
+          font-weight: 500;
+          letter-spacing: 0.03em;
         }
         </style>
         <script>
