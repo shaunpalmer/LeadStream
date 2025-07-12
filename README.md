@@ -1,6 +1,6 @@
-# Lead Tracking for Google Analytics - WordPress Plugin
+# LeadStream: Advanced Analytics Injector - WordPress Plugin
 
-A lightweight, universal JavaScript injection plugin for WordPress that allows you to add custom tracking code for Google Analytics, Facebook Pixel, TikTok Pixel, and any other JavaScript-based tracking platform.
+A professional JavaScript injection plugin for WordPress designed for agencies and marketers who need precise conversion tracking. Custom event handling for Meta Pixel, Google Analytics (GA4), TikTok Pixel, Triple Whale, and any analytics platform.
 
 ## 🎯 Features
 
@@ -26,7 +26,7 @@ A lightweight, universal JavaScript injection plugin for WordPress that allows y
 
 1. Upload the `lead-tracking-for-ga` folder to `/wp-content/plugins/`
 2. Activate the plugin through the 'Plugins' menu in WordPress
-3. Go to **"JS Injection"** in your WordPress admin menu
+3. Go to **"LeadStream"** in your WordPress admin menu
 4. Add your JavaScript code and save
 
 ## 💡 Use Cases
@@ -92,7 +92,7 @@ _linkedin_partner_id = "12345";
 ## 🎛️ Admin Interface
 
 ### **Location**
-- WordPress Admin → **"JS Injection"**
+- WordPress Admin → **"LeadStream"**
 - Top-level menu item (not under Settings)
 
 ### **Two Text Areas**
