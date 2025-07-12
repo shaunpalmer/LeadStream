@@ -51,9 +51,80 @@ function leadstream_analytics_settings_display() {
             <?php
                 settings_fields('lead-tracking-js-settings-group');
                 do_settings_sections('lead-tracking-js-settings-group');
-                submit_button('Save JavaScript');
             ?>
+            <div style="margin-bottom: 18px;">
+                <label class="ls-toggle-switch">
+                    <input type="checkbox" name="leadstream_inject_header" id="leadstream_inject_header" value="1" <?php checked(1, get_option('leadstream_inject_header', 1)); ?>>
+                    <span class="ls-slider"></span>
+                    Inject in Header
+                </label>
+                <label class="ls-toggle-switch">
+                    <input type="checkbox" name="leadstream_inject_footer" id="leadstream_inject_footer" value="1" <?php checked(1, get_option('leadstream_inject_footer', 1)); ?>>
+                    <span class="ls-slider"></span>
+                    Inject in Footer
+                </label>
+            </div>
+            <?php submit_button('Save JavaScript'); ?>
         </form>
+        <style>
+        .ls-toggle-switch {
+          position: relative;
+          display: inline-block;
+          width: 56px;
+          height: 28px;
+          margin-right: 12px;
+          vertical-align: middle;
+          user-select: none;
+        }
+        .ls-toggle-switch input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+        }
+        .ls-slider {
+          position: absolute;
+          cursor: pointer;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: #ccc;
+          transition: .4s;
+          border-radius: 34px;
+        }
+        .ls-toggle-switch input:checked + .ls-slider {
+          background-color: #27ae60;
+        }
+        .ls-slider:before {
+          position: absolute;
+          content: "";
+          height: 20px;
+          width: 20px;
+          left: 4px;
+          bottom: 4px;
+          background-color: white;
+          transition: .4s;
+          border-radius: 50%;
+        }
+        .ls-toggle-switch input:checked + .ls-slider:before {
+          transform: translateX(28px);
+        }
+        </style>
+        <script>
+        // Make toggles mutually exclusive
+        document.addEventListener('DOMContentLoaded', function() {
+          var headerToggle = document.getElementById('leadstream_inject_header');
+          var footerToggle = document.getElementById('leadstream_inject_footer');
+          if (headerToggle && footerToggle) {
+            headerToggle.addEventListener('change', function() {
+              if (headerToggle.checked) footerToggle.checked = false;
+            });
+            footerToggle.addEventListener('change', function() {
+              if (footerToggle.checked) headerToggle.checked = false;
+            });
+          }
+        });
+        </script>
         
         <script>
         document.getElementById('load-starter-script').addEventListener('click', function() {
@@ -137,6 +208,14 @@ function leadstream_analytics_settings_init() {
     ));
     register_setting('lead-tracking-js-settings-group', 'custom_footer_js', array(
         'sanitize_callback' => 'leadstream_sanitize_javascript'
+    ));
+    register_setting('lead-tracking-js-settings-group', 'leadstream_inject_header', array(
+        'type' => 'integer',
+        'default' => 1
+    ));
+    register_setting('lead-tracking-js-settings-group', 'leadstream_inject_footer', array(
+        'type' => 'integer',
+        'default' => 1
     ));
     
     add_settings_section(
@@ -272,7 +351,8 @@ function leadstream_sanitize_javascript($input) {
 // Inject header JavaScript
 function leadstream_inject_header_js() {
     $header_js = get_option('custom_header_js');
-    if (!empty($header_js)) {
+    $inject_header = get_option('leadstream_inject_header', 1);
+    if (!empty($header_js) && $inject_header) {
         echo '<!-- LeadStream: Custom Header JS -->' . "\n";
         echo '<script type="text/javascript">' . "\n" . $header_js . "\n" . '</script>' . "\n";
     }
@@ -282,7 +362,8 @@ add_action('wp_head', 'leadstream_inject_header_js', 999);
 // Inject footer JavaScript
 function leadstream_inject_footer_js() {
     $footer_js = get_option('custom_footer_js');
-    if (!empty($footer_js)) {
+    $inject_footer = get_option('leadstream_inject_footer', 1);
+    if (!empty($footer_js) && $inject_footer) {
         echo '<!-- LeadStream: Custom Footer JS -->' . "\n";
         echo '<script type="text/javascript">' . "\n" . $footer_js . "\n" . '</script>' . "\n";
     }
