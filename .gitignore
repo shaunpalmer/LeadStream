@@ -1,13 +1,4 @@
-# WordPress specific files
-.DS_Store
-Thumbs.db
-
-# Editor files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# WordPress Plugin .gitignore
 
 # OS generated files
 .DS_Store
@@ -18,16 +9,34 @@ Thumbs.db
 ehthumbs.db
 Thumbs.db
 
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
 # Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Runtime data
 pids
 *.pid
 *.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# nyc test coverage
+.nyc_output
 
 # Dependency directories
 node_modules/
+jspm_packages/
 
 # Optional npm cache directory
 .npm
@@ -35,6 +44,27 @@ node_modules/
 # Optional REPL history
 .node_repl_history
 
-# Backup files
-*.bak
-*.backup
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env
+
+# Temporary folders
+tmp/
+temp/
+
+# WordPress specific
+wp-config.php
+wp-content/uploads/
+wp-content/cache/
+wp-content/backup-db/
+wp-content/advanced-cache.php
+wp-content/wp-cache-config.php
+
+# Plugin specific ignores (if any assets get generated)
+*.min.js
+*.min.css
