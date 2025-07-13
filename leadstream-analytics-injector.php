@@ -23,35 +23,58 @@ function leadstream_analytics_settings_page() {
 }
 add_action('admin_menu', 'leadstream_analytics_settings_page');
 
+// Show 'Settings saved!' notice after saving
+add_action('admin_notices', function() {
+    if (isset($_GET['settings-updated']) && $_GET['settings-updated']) {
+        echo '<div class="notice notice-success is-dismissible"><p>Settings saved! Please refresh this page to see changes.</p></div>';
+    }
+    // GTM notice if container is set
+    $gtm_id = get_option('leadstream_gtm_id');
+    if (!empty($gtm_id) && preg_match('/^GTM-[A-Z0-9]+$/i', $gtm_id)) {
+        echo '<div class="notice notice-info is-dismissible"><p>Google Tag Manager container loaded (<strong>' . esc_html($gtm_id) . '</strong>). Configure triggers and tags in GTM dashboard.</p></div>';
+    }
+});
+
+// Inject GTM loader in <head>
+add_action('wp_head', function() {
+    $gtm_id = get_option('leadstream_gtm_id');
+    if (!empty($gtm_id) && preg_match('/^GTM-[A-Z0-9]+$/i', $gtm_id)) {
+        echo "<!-- Google Tag Manager -->\n";
+        echo "<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start': new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','" . esc_js($gtm_id) . "');</script>\n";
+        echo "<!-- End Google Tag Manager -->\n";
+    }
+}, 998);
+
+// Inject GTM <noscript> fallback in footer
+add_action('wp_footer', function() {
+    $gtm_id = get_option('leadstream_gtm_id');
+    if (!empty($gtm_id) && preg_match('/^GTM-[A-Z0-9]+$/i', $gtm_id)) {
+        echo '<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=' . esc_attr($gtm_id) . '" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>';
+    }
+}, 998);
+
 // Display settings page content
 function leadstream_analytics_settings_display() {
     ?>
     <div class="wrap">
         <h1>LeadStream: Advanced Analytics Injector</h1>
         <p>Professional JavaScript injection for advanced lead tracking. Add your custom code below - no &lt;script&gt; tags needed.</p>
-        
-        <div style="margin: 20px 0; padding: 15px; background: #f0f8ff; border-left: 4px solid #0073aa; border-radius: 4px;">
-            <h3 style="margin-top: 0;">🚀 Quick Start</h3>
-            <p>New to event tracking? Click the button below to load common tracking examples into the Footer JavaScript box.</p>
-            <button type="button" id="load-starter-script" class="button button-secondary" style="margin-right: 10px;">Load Starter Script</button>
-            <small style="color: #666;">This will populate the footer box with Google Analytics event tracking examples you can customize.</small>
-        </div>
-        
-        <div style="margin: 20px 0; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
-            <h3 style="margin-top: 0;">⚠️ Security & Privacy Notice</h3>
-            <ul style="margin: 10px 0;">
-                <li><strong>Admin Only:</strong> Only trusted administrators should add JavaScript code.</li>
-                <li><strong>GDPR Compliance:</strong> Ensure your tracking complies with local privacy laws. Avoid collecting personal data without consent.</li>
-                <li><strong>Code Safety:</strong> Only paste JavaScript from trusted sources. All code runs on your website frontend.</li>
-                <li><strong>No Default Tracking:</strong> This plugin does not track users by default - only your custom code will run.</li>
-            </ul>
-        </div>
-        
+        <!-- GTM Field -->
         <form action='options.php' method='post'>
             <?php
                 settings_fields('lead-tracking-js-settings-group');
                 do_settings_sections('lead-tracking-js-settings-group');
             ?>
+            <table class="form-table" style="margin-bottom: 24px;">
+                <tr>
+                    <th scope="row"><label for="leadstream_gtm_id">Google Tag Manager ID</label></th>
+                    <td>
+                        <input name="leadstream_gtm_id" id="leadstream_gtm_id" type="text" value="<?php echo esc_attr(get_option('leadstream_gtm_id', '')); ?>" placeholder="GTM-XXXXXXX" size="20" />
+                        <p class="description">Paste your GTM container ID (e.g. GTM-ABCDE12). No script tags—just the ID.</p>
+                    </td>
+                </tr>
+            </table>
+            <!-- ...existing toggle switches and submit button... -->
             <div class="ls-toggle-group">
                 <label class="ls-toggle-switch">
                     <input type="hidden" name="leadstream_inject_header" value="0">
@@ -225,6 +248,9 @@ function leadstream_analytics_settings_init() {
         'type' => 'integer',
         'default' => 1
     ));
+    register_setting('lead-tracking-js-settings-group', 'leadstream_gtm_id', array(
+        'sanitize_callback' => 'sanitize_text_field'
+    ));
     
     add_settings_section(
         'lead-tracking-js-settings-section',
@@ -245,6 +271,14 @@ function leadstream_analytics_settings_init() {
         'custom_footer_js_field',
         'Footer JavaScript',
         'leadstream_footer_js_field_callback',
+        'lead-tracking-js-settings-group',
+        'lead-tracking-js-settings-section'
+    );
+    
+    add_settings_field(
+        'leadstream_gtm_id_field',
+        'Google Tag Manager ID',
+        'leadstream_gtm_id_field_callback',
         'lead-tracking-js-settings-group',
         'lead-tracking-js-settings-section'
     );
@@ -290,6 +324,13 @@ document.getElementById(\'your-button-id\').addEventListener(\'click\', function
 
 // Click \'Load Starter Script\' above for more examples...">' . esc_textarea($footer_js) . '</textarea>';
     echo '<p class="description">JavaScript code to inject before closing &lt;/body&gt; tag. Perfect for event tracking and user interaction. No &lt;script&gt; tags needed.</p>';
+}
+
+// Callback for GTM ID field
+function leadstream_gtm_id_field_callback() {
+    $gtm_id = get_option('leadstream_gtm_id');
+    echo '<input name="leadstream_gtm_id" id="leadstream_gtm_id" type="text" value="' . esc_attr($gtm_id) . '" placeholder="GTM-XXXXXXX" size="20" />';
+    echo '<p class="description">Paste your GTM container ID (e.g. GTM-ABCDE12). No script tags—just the ID.</p>';
 }
 
 // Custom sanitization for JavaScript - preserves code integrity while ensuring security
