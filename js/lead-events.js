@@ -1,4 +1,6 @@
-// lead-events.js - Google Analytics Lead Tracking Events
+// lead-events.js - Generic Analytics Lead Tracking Events
+// NOTE: This file is not automatically loaded. Use the plugin's admin interface instead.
+// This serves as a reference for common tracking patterns.
 
 // Wait for DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', function () {
@@ -8,24 +10,24 @@ document.addEventListener('DOMContentLoaded', function () {
     if (typeof gtag !== 'undefined') {
       gtag('event', 'form_submit', {
         'event_category': 'Lead',
-        'event_label': 'WPForms Main',
+        'event_label': 'WPForms Contact Form',
         'value': 1
       });
       console.log('GA Event: WPForms submission tracked');
     }
   }, false);
 
-  // Track catering button clicks
-  const cateringBtn = document.getElementById('order-catering-btn');
-  if (cateringBtn) {
-    cateringBtn.addEventListener('click', function () {
+  // Track CTA button clicks (generic example)
+  const ctaBtn = document.getElementById('cta-button-id');
+  if (ctaBtn) {
+    ctaBtn.addEventListener('click', function () {
       if (typeof gtag !== 'undefined') {
-        gtag('event', 'cta_quote_click', {
+        gtag('event', 'cta_button_click', {
           'event_category': 'CTA',
-          'event_label': 'Order Catering - Main Hero',
+          'event_label': 'Main CTA Button',
           'value': 1
         });
-        console.log('GA Event: Catering button click tracked');
+        console.log('GA Event: CTA button click tracked');
       }
     });
   }

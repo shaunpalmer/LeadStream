@@ -58,22 +58,56 @@ function leadstream_analytics_settings_display() {
     ?>
     <div class="wrap">
         <h1>LeadStream: Advanced Analytics Injector</h1>
+        <?php settings_errors(); ?>
+        <div class="leadstream-quick-start" style="margin:20px 0; padding:15px; background:#f0f8ff; border-left:4px solid #0073aa; border-radius:4px;">
+            <h3 style="margin-top:0;">🚀 Quick Start</h3>
+            <p>New to event tracking? Click the button below to load common tracking examples into the Footer JavaScript box.</p>
+            <button type="button" id="load-starter-script" class="button button-secondary">Load Starter Script</button>
+            <small style="color:#666;">This will populate the footer box with Google Analytics, Google Tag Manager, TikTok, and Triple Whale event examples you can customize.</small>
+            <div style="margin-top:12px; padding:10px; background:#f9f9f9; border-radius:4px; border-left:3px solid #ffb900;">
+                <small style="color:#b07503;"><strong>⚠️ Already using Google Analytics?</strong> If you have Google Site Kit, MonsterInsights, or another GA plugin active, <strong>don't duplicate the same tracking code here</strong>. Use LeadStream for <em>custom events only</em> (form submissions, button clicks, etc.).</small>
+            </div>
+        </div>
+        <div class="leadstream-security-notice" style="margin:20px 0; padding:15px; background:#fff3cd; border-left:4px solid #ffc107; border-radius:4px;">
+            <h3 style="margin-top:0;">⚠️ Security & Privacy Notice</h3>
+            <ul style="margin:10px 0;">
+                <li><strong>Admin Only:</strong> Only trusted administrators should add JavaScript code.</li>
+                <li><strong>GDPR Compliance:</strong> Ensure your tracking complies with local privacy laws. Avoid collecting personal data without consent.</li>
+                <li><strong>Code Safety:</strong> Only paste JavaScript from trusted sources. All code runs on your website frontend.</li>
+                <li><strong>No Default Tracking:</strong> This plugin does not track users by default - only your custom code will run.</li>
+            </ul>
+        </div>
         <p>Professional JavaScript injection for advanced lead tracking. Add your custom code below - no &lt;script&gt; tags needed.</p>
-        <!-- GTM Field -->
+        <?php
+        // Conflict detection for popular analytics plugins
+        $conflicting_plugins = array(
+            'google-site-kit/google-site-kit.php' => 'Google Site Kit',
+            'monsterinsights/monsterinsights.php' => 'MonsterInsights',
+            'ga-google-analytics/ga-google-analytics.php' => 'GA Google Analytics',
+            'analytify/analytify.php' => 'Analytify',
+            'wp-analytify/wp-analytify.php' => 'WP Analytify',
+        );
+        $active_plugins = get_option('active_plugins', array());
+        $conflicts = array();
+        foreach ($conflicting_plugins as $plugin_file => $plugin_name) {
+            if (in_array($plugin_file, $active_plugins)) {
+                $conflicts[] = $plugin_name;
+            }
+        }
+        if (!empty($conflicts)) {
+            add_settings_error(
+                'leadstream_conflict',
+                'leadstream_conflict_warning',
+                'Warning: The following analytics plugins are active: <strong>' . esc_html(implode(', ', $conflicts)) . '</strong>. This may cause double tracking or conflicts. Consider disabling other analytics plugins if you use LeadStream for all tracking.',
+                'warning'
+            );
+        }
+        ?>
         <form action='options.php' method='post'>
             <?php
                 settings_fields('lead-tracking-js-settings-group');
                 do_settings_sections('lead-tracking-js-settings-group');
             ?>
-            <table class="form-table" style="margin-bottom: 24px;">
-                <tr>
-                    <th scope="row"><label for="leadstream_gtm_id">Google Tag Manager ID</label></th>
-                    <td>
-                        <input name="leadstream_gtm_id" id="leadstream_gtm_id" type="text" value="<?php echo esc_attr(get_option('leadstream_gtm_id', '')); ?>" placeholder="GTM-XXXXXXX" size="20" />
-                        <p class="description">Paste your GTM container ID (e.g. GTM-ABCDE12). No script tags—just the ID.</p>
-                    </td>
-                </tr>
-            </table>
             <!-- ...existing toggle switches and submit button... -->
             <div class="ls-toggle-group">
                 <label class="ls-toggle-switch">
@@ -156,7 +190,6 @@ function leadstream_analytics_settings_display() {
           }
         });
         </script>
-        
         <script>
         document.getElementById('load-starter-script').addEventListener('click', function() {
             var starterScript = `// LeadStream Starter Script - Common Event Tracking Examples
@@ -165,26 +198,26 @@ function leadstream_analytics_settings_display() {
 // Example 1: Track WPForms submission (fires on any WPForms form)
 document.addEventListener('wpformsSubmit', function (event) {
   gtag('event', 'form_submit', {
-    'event_category': 'Lead',
-    'event_label': 'WPForms Contact Form'
+    'event_category': '[Your Service/Product] Lead',
+    'event_label': '[Your Service/Product] WPForms Contact Form'
   });
 }, false);
 
 // Example 2: Track Contact Form 7 submission
 document.addEventListener('wpcf7mailsent', function(event) {
   gtag('event', 'form_submit', {
-    'event_category': 'Lead', 
-    'event_label': 'Contact Form 7'
+    'event_category': '[Your Service/Product] Lead', 
+    'event_label': '[Your Service/Product] Contact Form 7'
   });
 });
 
 // Example 3: Track a CTA button click by ID (edit ID as needed)
-var cateringBtn = document.getElementById('order-catering-btn');
-if (cateringBtn) {
-  cateringBtn.addEventListener('click', function () {
+var ctaBtn = document.getElementById('cta-main-hero-btn');
+if (ctaBtn) {
+  ctaBtn.addEventListener('click', function () {
     gtag('event', 'cta_quote_click', {
-      'event_category': 'CTA',
-      'event_label': 'Order [Your Service/Product] - Main Hero'
+      'event_category': '[Your Service/Product] CTA',
+      'event_label': '[Your Service/Product] Main Hero CTA Click'
     });
   });
 }
@@ -193,8 +226,8 @@ if (cateringBtn) {
 document.querySelectorAll('a[href^="tel:"]').forEach(function(link) {
   link.addEventListener('click', function() {
     gtag('event', 'phone_click', {
-      'event_category': 'Lead',
-      'event_label': 'Phone Number Click'
+      'event_category': '[Your Service/Product] Lead',
+      'event_label': '[Your Service/Product] Phone Number Click'
     });
   });
 });
@@ -203,8 +236,8 @@ document.querySelectorAll('a[href^="tel:"]').forEach(function(link) {
 document.querySelectorAll('a[href^="mailto:"]').forEach(function(link) {
   link.addEventListener('click', function() {
     gtag('event', 'email_click', {
-      'event_category': 'Lead', 
-      'event_label': 'Email Click'
+      'event_category': '[Your Service/Product] Lead', 
+      'event_label': '[Your Service/Product] Email Click'
     });
   });
 });
@@ -214,14 +247,14 @@ let scrollTracked = false;
 window.addEventListener('scroll', function() {
   if (!scrollTracked && window.scrollY > document.body.scrollHeight * 0.75) {
     gtag('event', 'scroll_depth', {
-      'event_category': 'Engagement',
-      'event_label': '75% Page Scroll'
+      'event_category': '[Your Service/Product] Engagement',
+      'event_label': '[Your Service/Product] 75% Page Scroll'
     });
     scrollTracked = true;
   }
 });
 
-// Replace 'event_label' and 'event_category' with your own descriptions.
+// Replace '[Your Service/Product]' with your own descriptions.
 // Add more listeners for other forms, buttons, or actions as needed.`;
             
             document.getElementById('custom_footer_js').value = starterScript;
@@ -309,16 +342,16 @@ function leadstream_footer_js_field_callback() {
 // Example: Track form submissions
 document.addEventListener(\'wpformsSubmit\', function(event) {
   gtag(\'event\', \'form_submit\', {
-    \'event_category\': \'Lead\',
-    \'event_label\': \'Contact Form\'
+    \'event_category\': [Your Service/Product] Lead,
+    \'event_label\': [Your Service/Product] Contact Form
   });
 });
 
 // Example: Track button clicks
 document.getElementById(\'your-button-id\').addEventListener(\'click\', function() {
   gtag(\'event\', \'button_click\', {
-    \'event_category\': \'CTA\',
-    \'event_label\': \'Get Quote Button\'
+    \'event_category\': [Your Service/Product] CTA,
+    \'event_label\': [Your Service/Product] Get Quote Button
   });
 });
 
@@ -336,8 +369,9 @@ function leadstream_gtm_id_field_callback() {
 // Custom sanitization for JavaScript - preserves code integrity while ensuring security
 // DRY placeholder check for both header and footer JS
 function leadstream_check_placeholder($code, $field) {
-    $pattern = '/\[Your Service\/Product\]/i';
-    if (preg_match($pattern, $code)) {
+// Match any bracketed text containing 'service' or 'product' (case-insensitive, any extra words, slashes, spaces)
+$pattern = '/\[[^\]]*(service|product)[^\]]*\]/i';
+if (preg_match($pattern, $code)) {
         switch ($field) {
             case 'header':
                 add_settings_error(
