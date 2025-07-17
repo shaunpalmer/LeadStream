@@ -68,3 +68,18 @@ wp-content/wp-cache-config.php
 # Plugin specific ignores (if any assets get generated)
 *.min.js
 *.min.css
+
+# Adobe design files
+*.psd
+*.ai
+
+# AI and custom instruction files
+*copilot*
+*ai*
+*custom-instruction*
+*instructions*
+*.prompt
+*.prompts
+
+Development notes concepts and code snippets.md
+project-notes/

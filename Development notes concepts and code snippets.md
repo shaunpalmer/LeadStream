@@ -2360,3 +2360,156 @@ Edit
 (Same for leadstream_inject_footer)
 
 If you want me to annotate or polish further, just say the word. This codebase is looking really pro, Shaun—just a minor tweak and you’re ready for prime time!
+
+You’re totally right, Shaun—**the whole point is to give real, practical event tracking samples for ALL the major form builders.**
+No point having a tracking plugin without “WPForms,” “Contact Form 7,” “Gravity Forms,” etc. covered *right up front*.
+
+---
+
+## **Here’s What I’ll Do:**
+
+1. **Scan your backup for all the major form tracking examples.**
+2. **List which ones are present,** and **summarize what each block does.**
+3. **Add instructions for Copilot** (or yourself) to make sure every one is selectable via checkbox.
+4. **Suggest clean headers and code snippets for each builder.**
+
+---
+
+## **A. Scanned Major Form Tracking Samples in Your Backup**
+
+### **1. WPForms**
+
+```js
+// === WPForms ===
+document.addEventListener('wpformsFormSubmitButtonClicked', function(event) {
+    gtag('event', 'form_start', {
+        'event_category': 'Form Interaction',
+        'event_label': 'WPForms Start'
+    });
+});
+```
+
+And in some backups:
+
+```js
+document.addEventListener('wpformsSubmit', function (event) {
+  gtag('event', 'form_submit', {
+    'event_category': 'Lead',
+    'event_label': 'WPForms Main'
+  });
+});
+```
+
+### **2. Contact Form 7**
+
+```js
+// === Contact Form 7 ===
+document.addEventListener('wpcf7mailsent', function(event) {
+    gtag('event', 'form_submit', {
+        'event_category': 'Lead Generation',
+        'event_label': 'Contact Form 7 - ' + event.detail.contactFormId,
+        'value': 1
+    });
+});
+```
+
+### **3. Gravity Forms**
+
+```js
+// === Gravity Forms ===
+document.addEventListener('gform_confirmation_loaded', function(event) {
+    gtag('event', 'form_submit', {
+        'event_category': 'Lead Generation',
+        'event_label': 'Gravity Form - ID ' + event.detail.formId,
+        'value': 1
+    });
+});
+```
+
+### **4. Ninja Forms** *(not always present, but sometimes in samples)*
+
+```js
+// === Ninja Forms ===
+document.addEventListener('nfFormSubmit', function(event) {
+    gtag('event', 'form_submit', {
+        'event_category': 'Lead Generation',
+        'event_label': 'Ninja Forms - ' + event.detail.formId,
+        'value': 1
+    });
+});
+```
+
+### **5. Generic HTML Forms (Fallback)**
+
+```js
+// === GENERIC FORM (Fallback) ===
+document.addEventListener('submit', function(event) {
+    if (event.target.tagName === 'FORM') {
+        gtag('event', 'form_submit', {
+            'event_category': 'Form Interaction',
+            'event_label': 'Generic Form Submit'
+        });
+    }
+});
+```
+
+---
+
+## **B. How to Instruct Copilot (or Yourself) for the Starter Loader**
+
+> “In the starter script loader, include checkboxes for each major WordPress form builder:
+>
+> * WPForms
+> * Contact Form 7
+> * Gravity Forms
+> * Ninja Forms (if you have sample)
+> * Generic HTML Form (fallback)
+>
+> When user ticks a box, load the corresponding code sample, each with a clear header.
+>
+> Example:
+> `[ ] WPForms  [ ] Contact Form 7  [ ] Gravity Forms  [ ] Ninja Forms  [ ] Generic Form`
+>
+> The resulting code should be well-labeled and commented, so users can easily customize or remove unwanted blocks.”
+
+---
+
+## **C. Example Checkbox UI:**
+
+```html
+<label><input type="checkbox" id="include-wpforms"> WPForms</label>
+<label style="margin-left: 18px;"><input type="checkbox" id="include-cf7"> Contact Form 7</label>
+<label style="margin-left: 18px;"><input type="checkbox" id="include-gf"> Gravity Forms</label>
+<label style="margin-left: 18px;"><input type="checkbox" id="include-nf"> Ninja Forms</label>
+<label style="margin-left: 18px;"><input type="checkbox" id="include-generic"> Generic Form</label>
+```
+
+---
+
+## **D. Example JS Loader (Pseudo-Code for Copilot)**
+
+```js
+var blocks = [];
+if(document.getElementById('include-wpforms').checked) blocks.push(`// === WPForms ===\ndocument.addEventListener('wpformsSubmit', function (event) { ... });`);
+if(document.getElementById('include-cf7').checked) blocks.push(`// === Contact Form 7 ===\ndocument.addEventListener('wpcf7mailsent', function(event) { ... });`);
+if(document.getElementById('include-gf').checked) blocks.push(`// === Gravity Forms ===\ndocument.addEventListener('gform_confirmation_loaded', function(event) { ... });`);
+if(document.getElementById('include-nf').checked) blocks.push(`// === Ninja Forms ===\ndocument.addEventListener('nfFormSubmit', function(event) { ... });`);
+if(document.getElementById('include-generic').checked) blocks.push(`// === GENERIC FORM (Fallback) ===\ndocument.addEventListener('submit', function(event) { ... });`);
+
+document.getElementById('custom_footer_js').value = blocks.join('\n\n');
+```
+
+---
+
+## **E. TL;DR Instruction for Copilot**
+
+* **Scan the backup file for all major form builder tracking blocks.**
+* **Make a checkbox for each form builder.**
+* **When checked, include that tracking code in the starter script textarea, with a clear header.**
+* **Comment each block.**
+* **Let user choose which to load, don’t dump everything by default.**
+
+---
+
+If you want the **final ready-to-paste block** or want it as a bulletproof “Copilot prompt,” just say the word.
+You’re building something *actually useful* for real WordPress users!

@@ -1,0 +1,89 @@
+Changelog
+
+Development
+Support
+Contributors & Developers
+
+## 2.5.3
+Enhancements:
+- Added a convenient "Settings" link beside "Deactivate" on the WordPress plugins page for quick access to plugin settings.
+
+## 2.5.2
+Enhancements:
+- Added role security: Only users with 'manage_options' capability (admins) can access the settings page and save options. Access is strictly restricted for non-admins.
+
+## 2.5.1
+Bug Fixes:
+- Fixed issue with event tracking not firing for Ninja Forms.
+
+## 2.5.0
+Enhancements:
+- Added advanced event validation for all form builders.
+
+## 2.4.0
+Enhancements:
+- Improved admin notice styling and dismissibility.
+
+## 2.3.0
+Enhancements:
+- Introduced plugin conflict detection for Google Site Kit and MonsterInsights.
+Bug Fixes:
+- Fixed double-injection warning logic for header/footer JS.
+
+## 2.2.0
+Enhancements:
+- Added Google Tag Manager integration (ID field, loader, noscript fallback).
+Bug Fixes:
+- Prevented fatal errors from invalid JS/PHP in code fields.
+
+## 2.1.0
+Enhancements:
+- Added selectable starter script samples with checkboxes for platforms and major form builders.
+Bug Fixes:
+- Improved validation warnings for unreplaced placeholders and invalid GA4 IDs.
+
+## 2.0.2
+Enhancements:
+- Enhanced security & privacy notices (GDPR, code safety, admin-only).
+Bug Fixes:
+- Fixed bug with settings page access for non-admins.
+
+## 2.0.1
+Bug Fixes:
+- Fixed issue with settings not saving correctly for footer JS.
+
+## 2.0.0
+Features:
+- Initial release: Basic JavaScript injection for header and footer.
+Enhancements:
+- Settings page with header/footer JS fields.
+- Starter script button for common event tracking examples.
+- Basic admin-only access and sanitization.
+- Basic privacy and security notice.
+
+## 1.1.1
+Enhancements:
+- Improved UI/UX for settings page, toggle switches, and quick start onboarding.
+
+## 1.1.0
+Enhancements:
+- Added comprehensive event tracking samples and onboarding.
+
+## 1.0.5
+- Minor UI polish and bug fixes.
+
+## 1.0.4
+- Minor bug fixes.
+
+## 1.0.3
+- Minor bug fixes.
+
+## 1.0.2
+- Minor bug fixes.
+
+## 1.0.1
+- Minor bug fixes.
+
+## 1.0.0
+- Initial release: Basic features and security.
+
