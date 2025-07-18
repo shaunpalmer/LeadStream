@@ -2,7 +2,7 @@
 /*
 Plugin Name: LeadStream: Advanced Analytics Injector
 Description: Professional JavaScript injection for advanced lead tracking. Custom event handling for Meta Pixel, Google Analytics (GA4), TikTok Pixel, Triple Whale, and any analytics platform. Built for agencies and marketers who need precise conversion tracking.
-Version: 2.5.2
+Version: 2.5.3
 Author: shaun palmer
 Text Domain: leadstream-analytics
 */
@@ -10,6 +10,8 @@ Text Domain: leadstream-analytics
 if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly
 }
+
+
 //Restrict admin notices here add security for roles
 // Add settings page to admin menu
 function leadstream_analytics_settings_page() {
@@ -516,3 +518,61 @@ add_filter(
         return $links;
     }
 );
+
+
+// Inject LeadStream badge into #wpfooter using jQuery for reliable placement
+// Injects our custom footer text into the native wpfooter
+add_action('admin_footer', function () {
+    echo '
+    <div id="leadstream-footer-replacement">
+        Made with <span class="emoji">❤️</span> by LeadStream
+    </div>
+    <style>
+        #wpfooter {
+            display: none !important; /* Hide original WordPress footer */
+        }
+        #leadstream-footer-replacement {
+            position: fixed;
+            bottom: 0;
+            left: 160px;
+            width: calc(100% - 160px); /* Adjust for sidebar */
+            background: #fff;
+            border-top: 1px solid #ccc;
+            padding: 10px;
+            font-size: 13px;
+            color: #2271b1;
+            text-align: center;
+            z-index: 9999;
+            box-shadow: 0 -1px 3px rgba(0,0,0,0.05);
+        }
+        .emoji {
+            margin: 0 4px;
+        }
+    </style>';
+});
+
+
+// Custom admin footer badge: styled, non-intrusive, inside layout
+
+
+// add_action('admin_head', function () {
+//     echo '<style>
+//         .leadstream-footer-badge {
+//             display: inline-block;
+//             margin-left: 10px;
+//              background: #fff;
+//              border-top: 2px solid #27ae60;
+//             color: #2271b1;
+//             font-size: 13px;
+//             font-weight: 500;
+//         }
+//         .leadstream-footer-badge .emoji {
+//             margin: 0 3px;
+//         }
+//     </style>';
+// });
+
+// add_filter('admin_footer_text', function ($text) {
+//     // Replace WP default with ours — or append if you want both
+//     return '<span class="leadstream-footer-badge">Made with <span class="emoji">❤️</span> by LeadStream</span>';
+// });
