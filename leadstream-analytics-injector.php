@@ -536,22 +536,20 @@ add_filter('admin_footer_text', function ($footer_text) {
 
 // Style the LeadStream badge to match WordPress admin theme
 add_action('admin_head', function () {
-    $screen = get_current_screen();
-    
-    if (
-        is_object($screen) &&
-        $screen->id === 'toplevel_page_leadstream-analytics-injector'
-    ) {
-        echo '<style>
-            .leadstream-footer-badge {
-                color: #2271b1;
-                font-weight: 500;
-            }
-            .leadstream-footer-badge .emoji {
-                margin: 0 3px;
-            }
-        </style>';
-    }
+    echo '<style>
+        .leadstream-footer-badge {
+            display: inline-block;
+            margin-left: 10px;
+            background: #fff;
+            border-top: 2px solid #27ae60;
+            color: #2271b1;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .leadstream-footer-badge .emoji {
+            margin: 0 3px;
+        }
+    </style>';
 });
 
 
