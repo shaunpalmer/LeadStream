@@ -25,7 +25,7 @@ A professional JavaScript injection plugin for WordPress designed for agencies a
 
 ## 🚀 Installation
 
-1. Upload the `lead-tracking-for-ga` folder to `/wp-content/plugins/`
+1. Upload the `leadstream-analytics-injector.php` folder to `/wp-content/plugins/`
 2. Activate the plugin through the 'Plugins' menu in WordPress
 3. Go to **"LeadStream"** in your WordPress admin menu
 4. Add your JavaScript code and save
