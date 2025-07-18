@@ -1,4 +1,5 @@
-# LeadStream: Advanced Analytics Injector - WordPress Plugin
+# LeadStream: Full Power Analytics Tracking Done Right.
+Easy-to-use event tracking for GA4, WPForms, and more—no setup headaches.
 
 A professional JavaScript injection plugin for WordPress designed for agencies and marketers who need precise conversion tracking. Custom event handling for Meta Pixel, Google Analytics (GA4), TikTok Pixel, Triple Whale, and any analytics platform.
 
