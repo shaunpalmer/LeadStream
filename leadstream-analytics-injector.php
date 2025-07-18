@@ -520,59 +520,41 @@ add_filter(
 );
 
 
-// Inject LeadStream badge into #wpfooter using jQuery for reliable placement
-// Injects our custom footer text into the native wpfooter
-add_action('admin_footer', function () {
-    echo '
-    <div id="leadstream-footer-replacement">
-        Made with <span class="emoji">❤️</span> by LeadStream
-    </div>
-    <style>
-        #wpfooter {
-            display: none !important; /* Hide original WordPress footer */
-        }
-        #leadstream-footer-replacement {
-            position: fixed;
-            bottom: 0;
-            left: 160px;
-            width: calc(100% - 160px); /* Adjust for sidebar */
-            background: #fff;
-            border-top: 1px solid #ccc;
-            padding: 10px;
-            font-size: 13px;
-            color: #2271b1;
-            text-align: center;
-            z-index: 9999;
-            box-shadow: 0 -1px 3px rgba(0,0,0,0.05);
-        }
-        .emoji {
-            margin: 0 4px;
-        }
-    </style>';
+// Show LeadStream badge only on plugin settings page, leave WP default elsewhere
+add_filter('admin_footer_text', function ($footer_text) {
+    $screen = get_current_screen();
+
+    if (
+        is_object($screen) &&
+        $screen->id === 'toplevel_page_leadstream-analytics-injector' // this is the correct screen ID for top-level menu
+    ) {
+        return '<span class="leadstream-footer-badge">Made with <span class="emoji">❤️</span> by LeadStream</span>';
+    }
+
+    return $footer_text; // show WP default on all other pages
+});
+
+// Style the LeadStream badge to match WordPress admin theme
+add_action('admin_head', function () {
+    $screen = get_current_screen();
+    
+    if (
+        is_object($screen) &&
+        $screen->id === 'toplevel_page_leadstream-analytics-injector'
+    ) {
+        echo '<style>
+            .leadstream-footer-badge {
+                color: #2271b1;
+                font-weight: 500;
+            }
+            .leadstream-footer-badge .emoji {
+                margin: 0 3px;
+            }
+        </style>';
+    }
 });
 
 
-// Custom admin footer badge: styled, non-intrusive, inside layout
 
 
-// add_action('admin_head', function () {
-//     echo '<style>
-//         .leadstream-footer-badge {
-//             display: inline-block;
-//             margin-left: 10px;
-//              background: #fff;
-//              border-top: 2px solid #27ae60;
-//             color: #2271b1;
-//             font-size: 13px;
-//             font-weight: 500;
-//         }
-//         .leadstream-footer-badge .emoji {
-//             margin: 0 3px;
-//         }
-//     </style>';
-// });
 
-// add_filter('admin_footer_text', function ($text) {
-//     // Replace WP default with ours — or append if you want both
-//     return '<span class="leadstream-footer-badge">Made with <span class="emoji">❤️</span> by LeadStream</span>';
-// });
