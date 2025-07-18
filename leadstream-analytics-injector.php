@@ -519,40 +519,88 @@ add_filter(
     }
 );
 
+add_action('admin_footer', function () {
+    $screen = function_exists('get_current_screen') ? get_current_screen() : null;
 
-// Show LeadStream badge only on plugin settings page, leave WP default elsewhere
-add_filter('admin_footer_text', function ($footer_text) {
-    $screen = get_current_screen();
-
-    if (
-        is_object($screen) &&
-        $screen->id === 'toplevel_page_leadstream-analytics-injector' // this is the correct screen ID for top-level menu
-    ) {
-        return '<span class="leadstream-footer-badge">Made with <span class="emoji">❤️</span> by LeadStream</span>';
+    if (is_object($screen) && $screen->id === 'toplevel_page_leadstream-analytics-injector') {
+        echo '
+        <div id="leadstream-footer-replacement">
+            Made with <span class="emoji">❤️</span> by LeadStream
+        </div>
+        <style>
+            #wpfooter { display: none !important; }
+            #leadstream-footer-replacement {
+                position: fixed;
+                bottom: 0;
+                left: 160px; /* Matches admin menu width */
+                width: calc(100% - 160px);
+                background: #fff;
+                border-top: 1px solid #ccc;
+                padding: 10px;
+                font-size: 13px;
+                color: #2271b1;
+                text-align: center;
+                z-index: 9999;
+                box-shadow: 0 -1px 3px rgba(0,0,0,0.05);
+            }
+            .emoji { margin: 0 4px; }
+        </style>';
     }
-
-    return $footer_text; // show WP default on all other pages
-});
-
-// Style the LeadStream badge to match WordPress admin theme
-add_action('admin_head', function () {
-    echo '<style>
-        .leadstream-footer-badge {
-            display: inline-block;
-            margin-left: 10px;
-            background: #fff;
-            border-top: 2px solid #27ae60;
-            color: #2271b1;
-            font-size: 13px;
-            font-weight: 500;
-        }
-        .leadstream-footer-badge .emoji {
-            margin: 0 3px;
-        }
-    </style>';
 });
 
 
+// // LeadStream footer replacement - fixed position approach that works
+// add_action('admin_footer', function () {
+//     echo '
+//     <div id="leadstream-footer-replacement">
+//         Made with <span class="emoji">❤️</span> by LeadStream
+//     </div>
+//     <style>
+//         #wpfooter {
+//             display: none !important; /* Hide original WordPress footer */
+//         }
+//         #leadstream-footer-replacement {
+//             position: fixed;
+//             bottom: 0;
+//             left: 160px;
+//             width: calc(100% - 160px); /* Adjust for sidebar */
+//             background: #fff;
+//             border-top: 1px solid #ccc;
+//             padding: 10px;
+//             font-size: 13px;
+//             color: #2271b1;
+//             text-align: center;
+//             z-index: 9999;
+//             box-shadow: 0 -1px 3px rgba(0,0,0,0.05);
+//         }
+//         .emoji {
+//             margin: 0 4px;
+//         }
+//     </style>';
+// });
 
 
 
+// add_filter('admin_footer_text', function ($footer_text) {
+//     $screen = get_current_screen();
+
+//     if (
+//         is_object($screen) &&
+//         $screen->id === 'toplevel_page_leadstream-analytics-injector' // this is the correct screen ID for top-level menu
+//     ) {
+//         return '<span class="leadstream-footer-badge">Made with <span class="emoji">❤️</span> by LeadStream</span>';
+//     }
+
+//     return $footer_text; // show WP default on all other pages
+// });
+
+// // Debug: Print current screen ID to browser console in admin footer
+// add_action('admin_footer', function () {
+//     $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+//     if (is_object($screen)) {
+//         echo '<div style="position:fixed;bottom:40px;right:24px;background:#fff3cd;border:1px solid #ffc107;padding:8px 16px;border-radius:6px;z-index:99999;font-size:14px;color:#333;box-shadow:0 2px 8px rgba(0,0,0,0.08);">';
+//         echo 'LeadStream Screen ID: <strong>' . esc_html($screen->id) . '</strong>';
+//         echo '</div>';
+//         echo '<script>console.log("LeadStream Screen ID: ' . esc_js($screen->id) . '")</script>';
+//     }
+// });
