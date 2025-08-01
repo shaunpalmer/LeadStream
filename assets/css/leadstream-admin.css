@@ -1,0 +1,88 @@
+/* LeadStream Admin Styles - Professional WordPress Admin Layout */
+
+/* Namespace so it only hits LeadStream pages */
+.leadstream-admin {
+  /* Bump up left-column width so labels live above fields nicely */
+  th {
+    width: 150px;
+    vertical-align: top;
+    text-align: left;
+    padding-bottom: .5em;
+  }
+
+  /* Move label display into its own block */
+  th label {
+    display: block;
+    margin-bottom: .25em;
+    font-weight: 600;
+    color: #23282d;
+  }
+
+  /* Full-width, monospace textarea */
+  td .code {
+    width: 100% !important;
+    max-width: 800px;
+    font-family: Menlo, Monaco, Consolas, monospace !important;
+    line-height: 1.4;
+    margin-bottom: .5em;
+    border: 1px solid #ddd;
+  }
+
+  /* Description styling */
+  td .description {
+    margin-top: .5em;
+    color: #666;
+    font-style: italic;
+  }
+
+  /* Spacing between sections */
+  table + h2,
+  h2 + table {
+    margin-top: 2em;
+  }
+}
+
+/* CodeMirror enhancements for LeadStream */
+.leadstream-admin .CodeMirror {
+  border: 1px solid #ddd !important;
+  font-family: Menlo, Monaco, Consolas, "Courier New", monospace !important;
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+  max-width: 800px !important;
+  width: 100% !important;
+  margin-bottom: .5em;
+}
+
+.leadstream-admin .CodeMirror-scroll {
+  min-height: 400px !important;
+}
+
+.leadstream-admin .CodeMirror-linenumber {
+  color: #999 !important;
+  padding: 0 8px 0 5px !important;
+}
+
+/* Section headers */
+.leadstream-admin h2 {
+  border-bottom: 1px solid #e1e1e1;
+  padding-bottom: 8px;
+  margin-bottom: 1em;
+  font-size: 1.3em;
+  font-weight: 600;
+  color: #23282d;
+}
+
+/* Input field styling */
+.leadstream-admin input[type="text"] {
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  font-size: 14px;
+}
+
+/* Submit button spacing */
+.leadstream-admin .submit {
+  margin-top: 1.5em;
+  padding-top: 1em;
+  border-top: 1px solid #e1e1e1;
+}

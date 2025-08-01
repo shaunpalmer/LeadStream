@@ -2,7 +2,7 @@
 /*
 Plugin Name: LeadStream: Advanced Analytics Injector
 Description: Professional JavaScript injection for advanced lead tracking. Custom event handling for Meta Pixel, Google Analytics (GA4), TikTok Pixel, Triple Whale, and any analytics platform. Built for agencies and marketers who need precise conversion tracking.
-Version: 2.5.3
+Version: 2.5.5
 Author: shaun palmer
 Text Domain: leadstream-analytics
 */
@@ -24,6 +24,188 @@ function leadstream_analytics_settings_page() {
     );
 }
 add_action('admin_menu', 'leadstream_analytics_settings_page');
+
+// Smart CodeMirror with switch - CDN default, WordPress fallback
+function leadstream_enqueue_code_editor($hook_suffix) {
+    // Only load on our plugin's settings page
+    if ('toplevel_page_leadstream-analytics-injector' !== $hook_suffix) {
+        return;
+    }
+
+    // CDN mode: reliable CodeMirror that actually works (WordPress fails silently)
+    $codemirror_source = get_option('leadstream_codemirror_source', 'cdn');
+    
+    switch ($codemirror_source) {
+        case 'auto':
+            // Try WordPress native first (more WordPress-y)
+            $editor_settings = wp_enqueue_code_editor([
+                'type' => 'text/javascript',
+                'codemirror' => [
+                    'mode' => 'javascript',
+                    'lineNumbers' => true,
+                    'indentUnit' => 2,
+                    'lineWrapping' => true,
+                    'matchBrackets' => true,
+                    'autoCloseBrackets' => true,
+                ]
+            ]);
+            
+            if (false !== $editor_settings) {
+                wp_enqueue_script('wp-code-editor');
+                wp_enqueue_style('wp-codemirror');
+                $init_script = sprintf(
+                    'jQuery(function($){ 
+                        console.log("LeadStream: Using WordPress CodeMirror (auto mode)");
+                        if ($("#custom_header_js").length) {
+                            wp.codeEditor.initialize($("#custom_header_js"), %s);
+                        }
+                        if ($("#custom_footer_js").length) {
+                            wp.codeEditor.initialize($("#custom_footer_js"), %s);
+                        }
+                    });',
+                    wp_json_encode($editor_settings),
+                    wp_json_encode($editor_settings)
+                );
+                wp_add_inline_script('wp-code-editor', $init_script);
+                break; // Success with WordPress
+            }
+            // WordPress failed, fallback to CDN
+            
+        case 'cdn':
+        default:
+            // CloudFlare CDN - reliable and fast (bulletproof default)
+            wp_enqueue_style('leadstream-codemirror-css',
+                'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css',
+                [], '5.65.5'
+            );
+            wp_enqueue_script('leadstream-codemirror-js',
+                'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js',
+                [], '5.65.5', true
+            );
+            wp_enqueue_script('leadstream-codemirror-mode-js',
+                'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/javascript/javascript.min.js',
+                ['leadstream-codemirror-js'], '5.65.5', true
+            );
+
+            // Initialize CodeMirror on both textareas
+            $inline = <<<'JS'
+document.addEventListener('DOMContentLoaded', function() {
+  console.log("LeadStream: Using CDN CodeMirror (reliable)");
+  
+  if (typeof CodeMirror !== 'undefined') {
+    // Header editor
+    var headerTextarea = document.getElementById('custom_header_js');
+    if (headerTextarea) {
+      console.log("LeadStream: Creating header editor");
+      CodeMirror.fromTextArea(headerTextarea, {
+        mode: 'javascript',
+        lineNumbers: true,
+        indentUnit: 2,
+        lineWrapping: true,
+        matchBrackets: true,
+        autoCloseBrackets: true,
+        theme: 'default'
+      });
+    }
+    
+    // Footer editor
+    var footerTextarea = document.getElementById('custom_footer_js');
+    if (footerTextarea) {
+      console.log("LeadStream: Creating footer editor");
+      CodeMirror.fromTextArea(footerTextarea, {
+        mode: 'javascript',
+        lineNumbers: true,
+        indentUnit: 2,
+        lineWrapping: true,
+        matchBrackets: true,
+        autoCloseBrackets: true,
+        theme: 'default'
+      });
+    }
+    
+    console.log("LeadStream: CodeMirror setup complete");
+  } else {
+    console.error("LeadStream: CodeMirror failed to load");
+  }
+});
+JS;
+            wp_add_inline_script('leadstream-codemirror-mode-js', $inline);
+            break;
+            
+        case 'wordpress':
+            // Force WordPress only (no CDN fallback)
+            $editor_settings = wp_enqueue_code_editor([
+                'type' => 'text/javascript',
+                'codemirror' => [
+                    'mode' => 'javascript',
+                    'lineNumbers' => true,
+                    'indentUnit' => 2,
+                    'lineWrapping' => true,
+                    'matchBrackets' => true,
+                    'autoCloseBrackets' => true,
+                ]
+            ]);
+            
+            if (false !== $editor_settings) {
+                wp_enqueue_script('wp-code-editor');
+                wp_enqueue_style('wp-codemirror');
+                $init_script = sprintf(
+                    'jQuery(function($){ 
+                        console.log("LeadStream: Using WordPress CodeMirror (forced)");
+                        if ($("#custom_header_js").length) {
+                            wp.codeEditor.initialize($("#custom_header_js"), %s);
+                        }
+                        if ($("#custom_footer_js").length) {
+                            wp.codeEditor.initialize($("#custom_footer_js"), %s);
+                        }
+                    });',
+                    wp_json_encode($editor_settings),
+                    wp_json_encode($editor_settings)
+                );
+                wp_add_inline_script('wp-code-editor', $init_script);
+            }
+            break;
+    }
+}
+add_action('admin_enqueue_scripts', 'leadstream_enqueue_code_editor');
+
+// Enqueue admin styles for proper WordPress form layout
+function leadstream_admin_styles($hook) {
+    if ('toplevel_page_leadstream-analytics-injector' !== $hook) {
+        return;
+    }
+    wp_enqueue_style(
+        'leadstream-admin-css',
+        plugin_dir_url(__FILE__) . 'assets/css/leadstream-admin.css',
+        ['wp-admin'],
+        '2.5.5'
+    );
+    
+    // Add CodeMirror styling that works with both WP and CDN versions
+    $codemirror_css = '
+    .CodeMirror {
+        border: 1px solid #ddd !important;
+        font-family: Consolas, Monaco, "Courier New", monospace !important;
+        font-size: 14px !important;
+        line-height: 1.4 !important;
+        max-width: 800px !important;
+        width: 100% !important;
+    }
+    .CodeMirror-scroll {
+        min-height: 400px !important;
+    }
+    .CodeMirror-linenumber {
+        color: #999 !important;
+        padding: 0 8px 0 5px !important;
+    }
+    .CodeMirror-gutters {
+        border-right: 1px solid #ddd !important;
+        background-color: #f7f7f7 !important;
+    }
+    ';
+    wp_add_inline_style('leadstream-admin-css', $codemirror_css);
+}
+add_action('admin_enqueue_scripts', 'leadstream_admin_styles');
 
 // Show 'Settings saved!' notice after saving
 add_action('admin_notices', function() {
@@ -125,24 +307,75 @@ function leadstream_analytics_settings_display() {
         <form action='options.php' method='post'>
             <?php
                 settings_fields('lead-tracking-js-settings-group');
-                do_settings_sections('lead-tracking-js-settings-group');
             ?>
-            <!-- ...existing toggle switches and submit button... -->
-            <div class="ls-toggle-group">
-                <label class="ls-toggle-switch">
-                    <input type="hidden" name="leadstream_inject_header" value="0">
-                    <input type="checkbox" name="leadstream_inject_header" id="leadstream_inject_header" value="1" <?php checked(1, get_option('leadstream_inject_header', 1)); ?>>
-                    <span class="ls-slider"></span>
-                    <span class="ls-label">in Header</span>
-                </label>
-                <label class="ls-toggle-switch">
-                    <input type="hidden" name="leadstream_inject_footer" value="0">
-                    <input type="checkbox" name="leadstream_inject_footer" id="leadstream_inject_footer" value="1" <?php checked(1, get_option('leadstream_inject_footer', 1)); ?>>
-                    <span class="ls-slider"></span>
-                    <span class="ls-label">in Footer</span>
-                </label>
+            <div class="leadstream-admin">
+                <h2>Custom JavaScript Injection</h2>
+                <table class="form-table leadstream-admin">
+                    <tbody>
+                        <tr>
+                            <th scope="row">
+                                <label for="custom_header_js">Header JavaScript</label>
+                            </th>
+                            <td>
+                                <?php leadstream_header_js_field_callback(); ?>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
+                                <label for="custom_footer_js">Footer JavaScript</label>
+                            </th>
+                            <td>
+                                <?php leadstream_footer_js_field_callback(); ?>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h2>Google Tag Manager</h2>
+                <table class="form-table leadstream-admin">
+                    <tbody>
+                        <tr>
+                            <th scope="row">
+                                <label for="leadstream_gtm_id">GTM Container ID</label>
+                            </th>
+                            <td>
+                                <?php leadstream_gtm_id_field_callback(); ?>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h2>Injection Settings</h2>
+                <table class="form-table leadstream-admin">
+                    <tbody>
+                        <tr>
+                            <th scope="row">
+                                <label>JavaScript Location</label>
+                            </th>
+                            <td>
+                                <div class="ls-toggle-group">
+                                    <label class="ls-toggle-switch">
+                                        <input type="hidden" name="leadstream_inject_header" value="0">
+                                        <input type="checkbox" name="leadstream_inject_header" id="leadstream_inject_header" value="1" <?php checked(1, get_option('leadstream_inject_header', 1)); ?>>
+                                        <span class="ls-slider"></span>
+                                        <span class="ls-label">in Header</span>
+                                    </label>
+                                    <label class="ls-toggle-switch">
+                                        <input type="hidden" name="leadstream_inject_footer" value="0">
+                                        <input type="checkbox" name="leadstream_inject_footer" id="leadstream_inject_footer" value="1" <?php checked(1, get_option('leadstream_inject_footer', 1)); ?>>
+                                        <span class="ls-slider"></span>
+                                        <span class="ls-label">in Footer</span>
+                                    </label>
+                                </div>
+                                <p class="description">Choose where your JavaScript code should be injected. Header is better for setup scripts, Footer for event tracking.</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
+            
             <?php submit_button('Save JavaScript'); ?>
+        </form>
         </form>
         <style>
         .ls-toggle-group {
@@ -376,7 +609,7 @@ add_action('admin_init', 'leadstream_analytics_settings_init');
 // Callback for header JS field
 function leadstream_header_js_field_callback() {
     $header_js = get_option('custom_header_js');
-    echo '<textarea id="custom_header_js" name="custom_header_js" rows="15" cols="80" style="width: 100%; max-width: 800px; font-family: Consolas, Monaco, monospace; font-size: 14px; background: #f1f1f1; border: 1px solid #ddd; padding: 10px;" placeholder="// Header JavaScript - typically for setup code or early-loading scripts
+    echo '<textarea id="custom_header_js" name="custom_header_js" class="large-text code" rows="15" placeholder="// Header JavaScript - typically for setup code or early-loading scripts
 
 // Example: Initialize tracking pixel (replace with your actual ID)
 // fbq(\'init\', \'YOUR_PIXEL_ID_HERE\');
@@ -392,7 +625,7 @@ function leadstream_header_js_field_callback() {
 // Callback for footer JS field
 function leadstream_footer_js_field_callback() {
     $footer_js = get_option('custom_footer_js');
-    echo '<textarea id="custom_footer_js" name="custom_footer_js" rows="15" cols="80" style="width: 100%; max-width: 800px; font-family: Consolas, Monaco, monospace; font-size: 14px; background: #f1f1f1; border: 1px solid #ddd; padding: 10px;" placeholder="// Footer JavaScript - perfect for event tracking after page loads
+    echo '<textarea id="custom_footer_js" name="custom_footer_js" class="large-text code" rows="15" placeholder="// Footer JavaScript - perfect for event tracking after page loads
 
 // Example: Track form submissions
 document.addEventListener(\'wpformsSubmit\', function(event) {
@@ -548,59 +781,3 @@ add_action('admin_footer', function () {
     }
 });
 
-
-// // LeadStream footer replacement - fixed position approach that works
-// add_action('admin_footer', function () {
-//     echo '
-//     <div id="leadstream-footer-replacement">
-//         Made with <span class="emoji">❤️</span> by LeadStream
-//     </div>
-//     <style>
-//         #wpfooter {
-//             display: none !important; /* Hide original WordPress footer */
-//         }
-//         #leadstream-footer-replacement {
-//             position: fixed;
-//             bottom: 0;
-//             left: 160px;
-//             width: calc(100% - 160px); /* Adjust for sidebar */
-//             background: #fff;
-//             border-top: 1px solid #ccc;
-//             padding: 10px;
-//             font-size: 13px;
-//             color: #2271b1;
-//             text-align: center;
-//             z-index: 9999;
-//             box-shadow: 0 -1px 3px rgba(0,0,0,0.05);
-//         }
-//         .emoji {
-//             margin: 0 4px;
-//         }
-//     </style>';
-// });
-
-
-
-// add_filter('admin_footer_text', function ($footer_text) {
-//     $screen = get_current_screen();
-
-//     if (
-//         is_object($screen) &&
-//         $screen->id === 'toplevel_page_leadstream-analytics-injector' // this is the correct screen ID for top-level menu
-//     ) {
-//         return '<span class="leadstream-footer-badge">Made with <span class="emoji">❤️</span> by LeadStream</span>';
-//     }
-
-//     return $footer_text; // show WP default on all other pages
-// });
-
-// // Debug: Print current screen ID to browser console in admin footer
-// add_action('admin_footer', function () {
-//     $screen = function_exists('get_current_screen') ? get_current_screen() : null;
-//     if (is_object($screen)) {
-//         echo '<div style="position:fixed;bottom:40px;right:24px;background:#fff3cd;border:1px solid #ffc107;padding:8px 16px;border-radius:6px;z-index:99999;font-size:14px;color:#333;box-shadow:0 2px 8px rgba(0,0,0,0.08);">';
-//         echo 'LeadStream Screen ID: <strong>' . esc_html($screen->id) . '</strong>';
-//         echo '</div>';
-//         echo '<script>console.log("LeadStream Screen ID: ' . esc_js($screen->id) . '")</script>';
-//     }
-// });

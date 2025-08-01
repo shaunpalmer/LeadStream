@@ -4,6 +4,22 @@ Development
 Support
 Contributors & Developers
 
+
+## 2.5.5
+Enhancements:
+- Implemented robust switch-based CodeMirror system with three modes: 'auto' (WordPress first, CDN fallback), 'cdn' (CloudFlare CDN default), and 'wordpress' (WordPress only).
+- Set CDN as default for maximum reliability and consistent syntax highlighting across all WordPress environments.
+- Added comprehensive fallback logic to ensure JavaScript editor always works, regardless of WordPress CodeMirror availability.
+- Removed debug echo statements after successful testing - plugin now runs clean in production.
+- Enhanced editor initialization with proper dependency management and error handling.
+- Optimized CodeMirror asset loading with version control and cache busting.
+
+## 2.5.4
+Enhancements:
+- Refined admin footer badge: Now only displays on the LeadStream settings page using robust conditional logic (screen ID check).
+- Cleaned up debug and legacy code for a professional, production-ready plugin.
+- Improved repo hygiene and code comments for future maintainability.
+
 ## 2.5.3
 Enhancements:
 - Added a convenient "Settings" link beside "Deactivate" on the WordPress plugins page for quick access to plugin settings.
