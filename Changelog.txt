@@ -4,6 +4,24 @@ Development
 Support
 Contributors & Developers
 
+## 2.6.5 - CODEMIRROR INTEGRATION FIX 🎯
+CRITICAL FIXES:
+- FIXED: Starter script generation broken due to CodeMirror API conflict
+- FIXED: Copy buttons in FAQ section not working with CodeMirror editors
+- FIXED: Code injection appearing then disappearing in textareas
+- FIXED: Toggle switches targeting wrong textareas intermittently
+
+TECHNICAL IMPROVEMENTS:
+- Implemented dual-method approach for textarea manipulation
+- Added CodeMirror API detection and fallback to native textarea methods
+- Enhanced code injection reliability with smart CodeMirror wrapper detection
+- Improved header/footer toggle switch logic validation
+
+DEVELOPER NOTES:
+- CodeMirror wraps textareas, requiring setValue() API instead of textarea.value
+- Both starter script and copy buttons now handle CodeMirror compatibility
+- Maintains backwards compatibility with non-CodeMirror setups
+- All admin functionality now works reliably in both scenarios
 
 ## 2.6.0 - MAJOR MODULAR REFACTOR 🎉
 BREAKING CHANGES:

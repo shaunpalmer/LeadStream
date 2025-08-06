@@ -19,7 +19,6 @@ document.addEventListener('DOMContentLoaded', function () {
         blocks.push(`// === TIKTOK PIXEL ===\nif (typeof ttq !== 'undefined') {\n  ttq.track('Contact');\n}`);
       }
       if (document.getElementById('ls-meta') && document.getElementById('ls-meta').checked) {
-        // Facebook Pixel should ideally go in header for proper initialization
         blocks.push(`// === META/FACEBOOK PIXEL ===
 // Initialize Facebook Pixel (put this in HEADER for best results)
 if (typeof fbq !== 'undefined') {
@@ -65,9 +64,35 @@ if (typeof fbq !== 'undefined') {
       }
 
       if (targetTextarea) {
-        targetTextarea.value = blocks.join('\n\n');
+        // Handle both regular textareas and CodeMirror-wrapped textareas
+        const codeToInsert = blocks.join('\n\n');
+        let codeSet = false;
 
-        // General guidance for tracking pixel placement
+        // Method 1: Try CodeMirror API if CodeMirror has wrapped this textarea
+        if (typeof CodeMirror !== 'undefined' && targetTextarea.nextSibling &&
+          targetTextarea.nextSibling.classList && targetTextarea.nextSibling.classList.contains('CodeMirror')) {
+          const cmWrapper = targetTextarea.nextSibling;
+          if (cmWrapper.CodeMirror) {
+            cmWrapper.CodeMirror.setValue(codeToInsert);
+            codeSet = true;
+          }
+        }
+
+        // Method 2: Fallback to regular textarea if CodeMirror method didn't work
+        if (!codeSet) {
+          targetTextarea.value = codeToInsert;
+
+          // Try to sync with CodeMirror if it exists but we missed it above
+          if (typeof CodeMirror !== 'undefined' && targetTextarea.nextSibling &&
+            targetTextarea.nextSibling.classList && targetTextarea.nextSibling.classList.contains('CodeMirror')) {
+            const cmWrapper = targetTextarea.nextSibling;
+            if (cmWrapper.CodeMirror) {
+              cmWrapper.CodeMirror.setValue(codeToInsert);
+            }
+          }
+        }
+
+        // Check if tracking pixels are selected and we're targeting Footer
         const hasTrackingPixels = [
           document.getElementById('ls-meta'),
           document.getElementById('ls-tiktok'),
@@ -117,7 +142,33 @@ jQuery(document).ready(function ($) {
     var $field = $('#' + fieldId);
 
     if ($field.length) {
-      $field.val(code);
+      var targetTextarea = $field[0]; // Get the raw DOM element
+      var codeSet = false;
+
+      // Method 1: Try CodeMirror API if CodeMirror has wrapped this textarea
+      if (typeof CodeMirror !== 'undefined' && targetTextarea.nextSibling &&
+        targetTextarea.nextSibling.classList && targetTextarea.nextSibling.classList.contains('CodeMirror')) {
+        const cmWrapper = targetTextarea.nextSibling;
+        if (cmWrapper.CodeMirror) {
+          cmWrapper.CodeMirror.setValue(code);
+          codeSet = true;
+        }
+      }
+
+      // Method 2: Fallback to regular textarea if CodeMirror method didn't work
+      if (!codeSet) {
+        $field.val(code);
+
+        // Try to sync with CodeMirror if it exists but we missed it above
+        if (typeof CodeMirror !== 'undefined' && targetTextarea.nextSibling &&
+          targetTextarea.nextSibling.classList && targetTextarea.nextSibling.classList.contains('CodeMirror')) {
+          const cmWrapper = targetTextarea.nextSibling;
+          if (cmWrapper.CodeMirror) {
+            cmWrapper.CodeMirror.setValue(code);
+          }
+        }
+      }
+
       $(this).text('Copied!').delay(1000).queue(function (next) {
         $(this).text($(this).data('copyfield') === 'custom_header_js' ? 'Copy to Header' : 'Copy to Footer');
         next();

@@ -2,7 +2,7 @@
 /*
 Plugin Name: LeadStream: Advanced Analytics Injector
 Description: Professional JavaScript injection for advanced lead tracking. Custom event handling for Meta Pixel, Google Analytics (GA4), TikTok Pixel, Triple Whale, and any analytics platform. Built for agencies and marketers who need precise conversion tracking.
-Version: 2.6.0
+Version: 2.6.5
 Author: shaun palmer
 Text Domain: leadstream-analytics
 */

@@ -215,7 +215,7 @@ JS;
             'leadstream-admin-settings',
             plugin_dir_url(dirname(dirname(__FILE__))) . 'assets/js/leadstream-admin-settings.js',
             ['jquery'], // Dependencies: jQuery for FAQ functionality
-            '2.6.0',
+            '2.6.4-' . time(), // Force cache refresh with timestamp
             true // Load in footer
         );
     }
