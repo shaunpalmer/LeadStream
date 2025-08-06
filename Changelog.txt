@@ -5,6 +5,31 @@ Support
 Contributors & Developers
 
 
+## 2.6.0 - MAJOR MODULAR REFACTOR 🎉
+BREAKING CHANGES:
+- Complete architectural overhaul from monolithic to modular design
+- Reduced main plugin file from 800+ lines to 24 lines (97% reduction)
+- Implemented professional namespace-based class structure under \LS\ namespace
+
+NEW MODULAR ARCHITECTURE:
+- \LS\Admin\Assets - Handles CodeMirror and admin CSS/JS enqueuing
+- \LS\Admin\Settings - Complete admin settings management (menu, fields, validation, UI)
+- \LS\Frontend\Injector - Frontend JavaScript and GTM injection
+- \LS\Utils - Shared sanitization and validation utilities
+
+MIGRATION & CLEANUP:
+- Executed safe, stepwise migration with zero downtime
+- Maintained 100% backward compatibility during transition
+- Removed all legacy commented code after verification
+- All functionality preserved with improved maintainability
+
+DEVELOPER BENEFITS:
+- Clean separation of concerns for easier maintenance
+- Modular structure enables easier feature additions
+- Professional WordPress plugin architecture
+- Improved code readability and debugging
+- Future-ready for extensions and enhancements
+
 ## 2.5.5
 Enhancements:
 - Implemented robust switch-based CodeMirror system with three modes: 'auto' (WordPress first, CDN fallback), 'cdn' (CloudFlare CDN default), and 'wordpress' (WordPress only).
