@@ -290,8 +290,6 @@ class Settings {
             </tbody>
         </table>
         <?php self::render_toggle_styles(); ?>
-        <?php self::render_toggle_scripts(); ?>
-        <?php self::render_starter_script(); ?>
         <?php
     }
     
@@ -331,7 +329,6 @@ document.addEventListener('wpformsSubmit', function (event) {
                 <!-- Add more items here for Gravity Forms, Ninja Forms, custom events, etc. -->
             </div>
         </div>
-        <?php self::render_faq_scripts(); ?>
         <?php self::render_faq_styles(); ?>
         <?php
     }
@@ -343,12 +340,8 @@ document.addEventListener('wpformsSubmit', function (event) {
         $header_js = get_option('custom_header_js');
         echo '<textarea id="custom_header_js" name="custom_header_js" class="large-text code" rows="15" placeholder="// Header JavaScript - typically for setup code or early-loading scripts
 
-// Example: Initialize tracking pixel (replace with your actual ID)
-// fbq(\'init\', \'YOUR_PIXEL_ID_HERE\');
-// fbq(\'track\', \'PageView\');
-
-// Example: Custom variable setup
-// window.customTrackingEnabled = true;
+// Click \'Load Starter Script\' above for pre-built examples
+// that work with your selected form builders and analytics platforms
 
 // Add your header JavaScript here...">' . esc_textarea($header_js) . '</textarea>';
         echo '<p class="description">JavaScript code to inject in the &lt;head&gt; section. Best for setup code and early-loading scripts. No &lt;script&gt; tags needed.</p>';
@@ -361,23 +354,10 @@ document.addEventListener('wpformsSubmit', function (event) {
         $footer_js = get_option('custom_footer_js');
         echo '<textarea id="custom_footer_js" name="custom_footer_js" class="large-text code" rows="15" placeholder="// Footer JavaScript - perfect for event tracking after page loads
 
-// Example: Track form submissions
-document.addEventListener(\'wpformsSubmit\', function(event) {
-  gtag(\'event\', \'form_submit\', {
-    \'event_category\': [Your Service/Product] Lead,
-    \'event_label\': [Your Service/Product] Contact Form
-  });
-});
+// Click \'Load Starter Script\' above for pre-built examples
+// that work with your selected form builders and analytics platforms
 
-// Example: Track button clicks
-document.getElementById(\'your-button-id\').addEventListener(\'click\', function() {
-  gtag(\'event\', \'button_click\', {
-    \'event_category\': [Your Service/Product] CTA,
-    \'event_label\': [Your Service/Product] Get Quote Button
-  });
-});
-
-// Click \'Load Starter Script\' above for more examples...">' . esc_textarea($footer_js) . '</textarea>';
+// Add your custom footer JavaScript here...">' . esc_textarea($footer_js) . '</textarea>';
         echo '<p class="description">JavaScript code to inject before closing &lt;/body&gt; tag. Perfect for event tracking and user interaction. No &lt;script&gt; tags needed.</p>';
     }
     
@@ -487,110 +467,6 @@ document.getElementById(\'your-button-id\').addEventListener(\'click\', function
           letter-spacing: 0.03em;
         }
         </style>
-        <?php
-    }
-    
-    /**
-     * Render toggle scripts
-     */
-    private static function render_toggle_scripts() {
-        ?>
-        <script>
-        // Make toggles mutually exclusive
-        document.addEventListener('DOMContentLoaded', function() {
-          var headerToggle = document.getElementById('leadstream_inject_header');
-          var footerToggle = document.getElementById('leadstream_inject_footer');
-          if (headerToggle && footerToggle) {
-            headerToggle.addEventListener('change', function() {
-              if (headerToggle.checked) footerToggle.checked = false;
-            });
-            footerToggle.addEventListener('change', function() {
-              if (footerToggle.checked) headerToggle.checked = false;
-            });
-          }
-        });
-        </script>
-        <?php
-    }
-    
-    /**
-     * Render starter script
-     */
-    private static function render_starter_script() {
-        ?>
-        <script>
-        document.getElementById('load-starter-script').addEventListener('click', function() {
-            var blocks = [];
-            // Platforms
-            if(document.getElementById('ls-ga4').checked) {
-                blocks.push(`// === GOOGLE ANALYTICS (GA4) ===\ndocument.addEventListener('form_submit', function(event) {\n  gtag('event', 'form_submit', {\n    'event_category': '[Your Service/Product] Lead',\n    'event_label': '[Your Service/Product] Form Submission'\n  });\n});`);
-            }
-            if(document.getElementById('ls-tiktok').checked) {
-                blocks.push(`// === TIKTOK PIXEL ===\nif (typeof ttq !== 'undefined') {\n  ttq.track('Contact');\n}`);
-            }
-            if(document.getElementById('ls-meta').checked) {
-                blocks.push(`// === META/FACEBOOK PIXEL ===\nif (typeof fbq !== 'undefined') {\n  fbq('track', 'Contact');\n}`);
-            }
-            if(document.getElementById('ls-triple').checked) {
-                blocks.push(`// === TRIPLE WHALE TRACKING ===\nwindow.triplewhale && triplewhale.track && triplewhale.track('LeadStreamEvent');`);
-            }
-            // Form Builders
-            if(document.getElementById('ls-wpforms').checked) {
-                blocks.push(`// === WPForms ===\ndocument.addEventListener('wpformsSubmit', function (event) {\n  gtag('event', 'form_submit', {\n    'event_category': '[Your Service/Product] Lead',\n    'event_label': '[Your Service/Product] WPForms Contact Form'\n  });\n});`);
-            }
-            if(document.getElementById('ls-cf7').checked) {
-                blocks.push(`// === CONTACT FORM 7 ===\ndocument.addEventListener('wpcf7mailsent', function(event) {\n  gtag('event', 'form_submit', {\n    'event_category': 'Lead Generation',\n    'event_label': 'Contact Form 7 - ' + event.detail.contactFormId,\n    'value': 1\n  });\n});`);
-            }
-            if(document.getElementById('ls-gravity').checked) {
-                blocks.push(`// === GRAVITY FORMS ===\ndocument.addEventListener('gform_confirmation_loaded', function(event) {\n  gtag('event', 'form_submit', {\n    'event_category': 'Lead Generation',\n    'event_label': 'Gravity Form - ID ' + event.detail.formId,\n    'value': 1\n  });\n});`);
-            }
-            if(document.getElementById('ls-ninja').checked) {
-                blocks.push(`// === NINJA FORMS ===\ndocument.addEventListener('nfFormSubmit', function(event) {\n  gtag('event', 'form_submit', {\n    'event_category': 'Lead Generation',\n    'event_label': 'Ninja Forms - ' + event.detail.formId,\n    'value': 1\n  });\n});`);
-            }
-            if(document.getElementById('ls-generic').checked) {
-                blocks.push(`// === GENERIC FORM (Fallback) ===\ndocument.addEventListener('submit', function(event) {\n  if (event.target.tagName === 'FORM') {\n    gtag('event', 'form_submit', {\n      'event_category': 'Form Interaction',\n      'event_label': 'Generic Form Submit'\n    });\n  }\n});`);
-            }
-            document.getElementById('custom_footer_js').value = blocks.join('\n\n');
-            alert('Starter script loaded! Scroll down to customize and save your code.');
-        });
-        </script>
-        <?php
-    }
-    
-    /**
-     * Render FAQ scripts
-     */
-    private static function render_faq_scripts() {
-        ?>
-        <script>
-        jQuery(document).ready(function($){
-            // Accordion toggle
-            $('.ls-accordion-toggle').on('click', function(){
-                $(this).toggleClass('active')
-                    .next('.ls-accordion-panel').slideToggle(200);
-            });
-            // Copy to header/footer field
-            $('.ls-copy-btn').on('click', function(){
-                var codeId = $(this).data('copytarget');
-                var fieldId = $(this).data('copyfield');
-                var code = $('#' + codeId).text().trim();
-                var $field = $('#' + fieldId);
-                if ($field.length) {
-                    $field.val(code);
-                    $(this).text('Copied!').delay(1000).queue(function(next){
-                        $(this).text($(this).data('copyfield') === 'custom_header_js' ? 'Copy to Header' : 'Copy to Footer');
-                        next();
-                    });
-                } else {
-                    navigator.clipboard.writeText(code);
-                    $(this).text('Copied!').delay(1000).queue(function(next){
-                        $(this).text('Copy Code');
-                        next();
-                    });
-                }
-            });
-        });
-        </script>
         <?php
     }
     

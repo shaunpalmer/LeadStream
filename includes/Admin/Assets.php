@@ -13,6 +13,7 @@ class Assets {
     public static function init() {
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_code_editor']);
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_admin_styles']);
+        add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_admin_scripts']);
     }
     
     /**
@@ -198,5 +199,24 @@ JS;
         }
         ';
         wp_add_inline_style('leadstream-admin-css', $codemirror_css);
+    }
+    
+    /**
+     * Enqueue admin JavaScript for settings functionality
+     */
+    public static function enqueue_admin_scripts($hook) {
+        // Only load on our plugin's settings page
+        if ('toplevel_page_leadstream-analytics-injector' !== $hook) {
+            return;
+        }
+        
+        // Enqueue our admin settings JavaScript
+        wp_enqueue_script(
+            'leadstream-admin-settings',
+            plugin_dir_url(dirname(dirname(__FILE__))) . 'assets/js/leadstream-admin-settings.js',
+            ['jquery'], // Dependencies: jQuery for FAQ functionality
+            '2.6.0',
+            true // Load in footer
+        );
     }
 }

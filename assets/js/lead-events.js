@@ -1,6 +1,10 @@
-// lead-events.js - Generic Analytics Lead Tracking Events
-// NOTE: This file is not automatically loaded. Use the plugin's admin interface instead.
-// This serves as a reference for common tracking patterns.
+// lead-events.js - REFERENCE FILE FOR ANALYTICS TRACKING
+// ⚠️  IMPORTANT: This file is NOT automatically loaded by the plugin!
+// ⚠️  This serves as a REFERENCE/TEMPLATE for common tracking patterns.
+// ⚠️  Use the plugin's admin interface "Load Starter Script" instead.
+// 
+// This file contains examples of generic analytics events you can copy
+// and customize for your specific needs using the admin interface.
 
 // Wait for DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', function () {
