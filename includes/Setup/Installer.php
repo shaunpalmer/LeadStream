@@ -21,8 +21,10 @@ class Installer {
      * Uses the Template Method pattern for consistent setup.
      */
     public static function activate() {
+        error_log('LeadStream: Installer::activate() called');
         self::create_tables();
         self::flush_rewrite_rules();
+        error_log('LeadStream: Tables created and rewrites flushed');
     }
 
     /**
@@ -71,8 +73,11 @@ class Installer {
             ) $charset_collate;
         ";
 
-        dbDelta( $sql_links );
-        dbDelta( $sql_clicks );
+        error_log('LeadStream: About to create tables...');
+        $result1 = dbDelta( $sql_links );
+        $result2 = dbDelta( $sql_clicks );
+        error_log('LeadStream: dbDelta results - Links: ' . print_r($result1, true));
+        error_log('LeadStream: dbDelta results - Clicks: ' . print_r($result2, true));
     }
 
     /**
@@ -82,3 +87,5 @@ class Installer {
         flush_rewrite_rules();
     }
 }
+
+// DEBUG: Adding error log to verify activation

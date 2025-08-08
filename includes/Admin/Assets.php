@@ -15,6 +15,7 @@ class Assets {
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_admin_styles']);
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_admin_scripts']);
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_utm_builder']);
+        add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_pretty_links']);
     }
     
     /**
@@ -251,5 +252,118 @@ JS;
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('leadstream_utm_nonce')
         ]);
+    }
+
+    /**
+     * Enqueue Pretty Links dashboard assets
+     */
+    public static function enqueue_pretty_links($hook) {
+        // Only on the LeadStream settings page
+        if ($hook !== 'toplevel_page_leadstream-analytics-injector') {
+            return;
+        }
+
+        // Only if we're on the links tab
+        if (!isset($_GET['tab']) || $_GET['tab'] !== 'links') {
+            return;
+        }
+
+        // Enqueue WordPress list table styles (ensures proper styling)
+        wp_enqueue_style('list-tables');
+        
+        $plugin_url = plugin_dir_url(dirname(dirname(__FILE__)));
+        $plugin_dir = plugin_dir_path(dirname(dirname(__FILE__)));
+        
+        // Create the JS file if it doesn't exist
+        $js_file = $plugin_dir . 'assets/js/pretty-links.js';
+        if (!file_exists($js_file)) {
+            self::create_pretty_links_js($js_file);
+        }
+        
+        wp_enqueue_script(
+            'leadstream-pretty-links',
+            $plugin_url . 'assets/js/pretty-links.js',
+            ['jquery'],
+            filemtime($js_file),
+            true
+        );
+
+        // Add localized data for AJAX
+        wp_localize_script('leadstream-pretty-links', 'leadstream_links_ajax', [
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('leadstream_links_nonce')
+        ]);
+    }
+
+    /**
+     * Create Pretty Links JavaScript file
+     */
+    private static function create_pretty_links_js($file_path) {
+        $js_content = <<<'JS'
+jQuery(document).ready(function($) {
+    'use strict';
+
+    // Copy link functionality
+    $('.copy-link-btn').on('click', function(e) {
+        e.preventDefault();
+        const url = $(this).data('url');
+        
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(url).then(function() {
+                alert('Link copied to clipboard!');
+            }).catch(function() {
+                // Fallback
+                copyToClipboardFallback(url);
+            });
+        } else {
+            copyToClipboardFallback(url);
+        }
+    });
+
+    // Fallback copy method
+    function copyToClipboardFallback(text) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+            document.execCommand('copy');
+            alert('Link copied to clipboard!');
+        } catch (err) {
+            console.error('Could not copy text: ', err);
+            alert('Could not copy link. Please copy manually: ' + text);
+        }
+        
+        document.body.removeChild(textArea);
+    }
+
+    // Test link functionality
+    $('.test-link-btn').on('click', function(e) {
+        e.preventDefault();
+        const url = $(this).data('url');
+        window.open(url, '_blank');
+    });
+
+    // Delete confirmation
+    $('.delete-link-btn').on('click', function(e) {
+        if (!confirm('Are you sure you want to delete this link? This action cannot be undone.')) {
+            e.preventDefault();
+        }
+    });
+});
+JS;
+
+        // Ensure the directory exists
+        $dir = dirname($file_path);
+        if (!file_exists($dir)) {
+            wp_mkdir_p($dir);
+        }
+
+        file_put_contents($file_path, $js_content);
     }
 }

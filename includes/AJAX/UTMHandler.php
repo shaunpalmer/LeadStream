@@ -100,8 +100,13 @@ class UTMHandler {
             wp_send_json_error('Failed to generate valid UTM URL');
         }
 
-        // Store in history transient
-        $history = get_transient('ls_utm_history') ?: [];
+        // Store in history (persistent user meta instead of transient)
+        $user_id = get_current_user_id();
+        $history = get_user_meta($user_id, 'ls_utm_history', true);
+        if (!is_array($history)) {
+            $history = [];
+        }
+        
         array_unshift($history, [
             'url' => $utm_url,
             'time' => time(),
@@ -118,7 +123,7 @@ class UTMHandler {
         if (count($history) > $max_entries) {
             $history = array_slice($history, 0, $max_entries);
         }
-        set_transient('ls_utm_history', $history, DAY_IN_SECONDS);
+        update_user_meta($user_id, 'ls_utm_history', $history);
 
         // Return success with the generated UTM URL
         wp_send_json_success($utm_url);
@@ -138,9 +143,10 @@ class UTMHandler {
             wp_send_json_error('Insufficient permissions', 403);
         }
 
-        // Clear the transient
-        delete_transient('ls_utm_history');
-        
+        // Clear the user meta (persistent storage)
+        $user_id = get_current_user_id();
+        delete_user_meta($user_id, 'ls_utm_history');
+
         wp_send_json_success('History cleared successfully');
     }
 }

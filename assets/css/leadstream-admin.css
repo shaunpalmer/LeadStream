@@ -16,6 +16,7 @@
     margin-bottom: .25em;
     font-weight: 600;
     color: #23282d;
+    font-size: 14px; /* Match WordPress admin font size */
   }
 
   /* Full-width, monospace textarea */
@@ -28,11 +29,35 @@
     border: 1px solid #ddd;
   }
 
-  /* Description styling */
-  td .description {
+  /* Description styling - match WordPress admin */
+  td .description,
+  p.description {
     margin-top: .5em;
-    color: #666;
-    font-style: italic;
+    color: #646970;
+    font-style: normal;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* Input fields - match WordPress admin styling */
+  input[type="text"],
+  input[type="url"],
+  input[type="email"] {
+    font-size: 14px;
+    line-height: 1.4;
+    padding: 6px 8px;
+    border: 1px solid #8c8f94;
+    border-radius: 3px;
+    background-color: #fff;
+    color: #2c3338;
+  }
+
+  input[type="text"]:focus,
+  input[type="url"]:focus,
+  input[type="email"]:focus {
+    border-color: #2271b1;
+    box-shadow: 0 0 0 1px #2271b1;
+    outline: 2px solid transparent;
   }
 
   /* Spacing between sections */
@@ -40,11 +65,86 @@
   h2 + table {
     margin-top: 2em;
   }
+
+  /* Form table improvements */
+  .form-table th {
+    font-size: 14px;
+    line-height: 1.3;
+    font-weight: 600;
+    padding: 20px 10px 20px 0;
+  }
+
+  .form-table td {
+    padding: 15px 10px 20px 0;
+    line-height: 1.3;
+    vertical-align: top;
+  }
+}
+
+/* Pretty Links specific styles */
+.leadstream-admin .postbox {
+  background: #fff;
+  border: 1px solid #c3c4c7;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.leadstream-admin .postbox-header {
+  border-bottom: 1px solid #c3c4c7;
+  background: #fff;
+}
+
+.leadstream-admin .postbox-header h2 {
+  font-size: 14px;
+  line-height: 1.4;
+  margin: 0;
+  padding: 8px 12px;
+  font-weight: 600;
+  color: #1d2327;
+  border-bottom: none;
+}
+
+.leadstream-admin .inside {
+  padding: 12px;
+}
+
+/* Live preview styling */
+#slug-preview {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+#slug-feedback {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Button improvements */
+.leadstream-admin .submit {
+  margin-top: 1.5em;
+  padding-top: 1em;
+  border-top: 1px solid #c3c4c7;
+}
+
+.leadstream-admin .button {
+  font-size: 13px;
+  line-height: 2.15384615;
+  min-height: 30px;
+  margin: 0;
+  padding: 0 10px;
+  cursor: pointer;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 3px;
+  white-space: nowrap;
+  box-sizing: border-box;
+  text-decoration: none;
+  vertical-align: top;
 }
 
 /* CodeMirror enhancements for LeadStream */
 .leadstream-admin .CodeMirror {
-  border: 1px solid #ddd !important;
+  border: 1px solid #8c8f94 !important;
   font-family: Menlo, Monaco, Consolas, "Courier New", monospace !important;
   font-size: 14px !important;
   line-height: 1.4 !important;
@@ -64,25 +164,65 @@
 
 /* Section headers */
 .leadstream-admin h2 {
-  border-bottom: 1px solid #e1e1e1;
+  border-bottom: 1px solid #c3c4c7;
   padding-bottom: 8px;
   margin-bottom: 1em;
   font-size: 1.3em;
   font-weight: 600;
-  color: #23282d;
+  color: #1d2327;
+  line-height: 1.4;
 }
 
-/* Input field styling */
-.leadstream-admin input[type="text"] {
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 3px;
+/* WordPress admin notice improvements */
+.leadstream-admin .notice {
+  margin: 5px 0 15px;
+  padding: 1px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  border-left-width: 4px;
+  border-left-style: solid;
+  background: #fff;
+  box-shadow: 0 1px 1px 0 rgba(0, 0, 0, 0.1);
+}
+
+/* Pretty Links helper section improvements */
+.leadstream-pretty-links-helper {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.leadstream-pretty-links-helper h3 {
   font-size: 14px;
+  font-weight: 600;
+  color: #1d2327;
+  line-height: 1.4;
 }
 
-/* Submit button spacing */
-.leadstream-admin .submit {
-  margin-top: 1.5em;
-  padding-top: 1em;
-  border-top: 1px solid #e1e1e1;
+.pretty-link-item {
+  font-family: Consolas, Monaco, "Courier New", monospace;
+  font-size: 12px;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.pretty-link-item:hover {
+  background-color: #f6f7f7 !important;
+  border-color: #c3c4c7 !important;
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 782px) {
+  .leadstream-admin .form-table th,
+  .leadstream-admin .form-table td {
+    display: block;
+    width: auto;
+  }
+  
+  .leadstream-admin .form-table th {
+    padding: 20px 0 5px;
+  }
+  
+  .leadstream-admin .form-table td {
+    padding: 5px 0 20px;
+  }
 }

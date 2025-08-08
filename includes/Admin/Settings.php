@@ -17,6 +17,13 @@ class Settings {
         add_action('admin_notices', [__CLASS__, 'show_admin_notices']);
         add_action('admin_footer', [__CLASS__, 'custom_admin_footer']);
         add_filter('plugin_action_links_' . plugin_basename(dirname(dirname(__DIR__)) . '/leadstream-analytics-injector.php'), [__CLASS__, 'add_settings_link']);
+        
+        // Pretty Links form handlers (remove old admin_post handlers)
+        // add_action('admin_post_add_pretty_link', [__CLASS__, 'handle_add_pretty_link']);
+        // add_action('admin_post_edit_pretty_link', [__CLASS__, 'handle_edit_pretty_link']);
+        
+        // AJAX handlers
+        add_action('wp_ajax_check_slug_availability', [__CLASS__, 'ajax_check_slug_availability']);
     }
     
     /**
@@ -109,13 +116,23 @@ class Settings {
             wp_die('You do not have sufficient permissions to access this page.');
         }
         
-        // Get current tab
+        // Handle form submissions FIRST (before any output)
         $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'javascript';
+        
+        // Only process forms on Pretty Links tab and if it's a POST request
+        if ($current_tab === 'links' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+            try {
+                self::handle_pretty_links_form_submission_early();
+            } catch (Exception $e) {
+                // Log error and show user-friendly message
+                error_log('LeadStream form processing error: ' . $e->getMessage());
+                add_settings_error('leadstream_links', 'form_error', 'An error occurred while processing the form. Please try again.');
+            }
+        }
         
         ?>
         <div class="wrap">
             <h1>LeadStream: Advanced Analytics Injector</h1>
-            <?php settings_errors(); ?>
             
             <!-- Tab Navigation -->
             <nav class="nav-tab-wrapper">
@@ -147,7 +164,223 @@ class Settings {
                     self::render_utm_tab();
                     break;
                 case 'links':
-                    self::render_links_tab();
+                    $action = $_GET['action'] ?? 'list';
+                    
+                    switch ($action) {
+                        case 'add':
+                            self::render_add_link_form();
+                            break;
+                        case 'edit':
+                            self::render_edit_link_form();
+                            break;
+                        default:
+                            // Show admin notices for Pretty Links
+                            self::show_pretty_links_notices();
+                            
+                            // Show quick stats
+                            self::show_pretty_links_stats();
+                            
+                            // Show quick access helper
+                            self::render_pretty_links_helper();
+                            
+                            // Instantiate and render our List Table
+                            $table = new \LS\Admin\LinksDashboard();
+                            $table->prepare_items();
+                            echo '<div class="wrap">';
+                            echo '<h1 class="wp-heading-inline">Pretty Links Dashboard</h1>';
+                            echo '<a href="' . admin_url('admin.php?page=leadstream-analytics-injector&tab=links&action=add') . '" class="page-title-action">Add New</a>';
+                            echo '<hr class="wp-header-end">';
+                            $table->display();
+                            
+                            // FAQ Accordion for Pretty Links
+                            ?>
+                            <div class="postbox" style="margin-top: 30px;">
+                                <div class="postbox-header">
+                                    <span class="dashicons dashicons-editor-help ls-faq-icon" style="vertical-align: middle; font-size: 20px !important; width: 20px !important; height: 20px !important; line-height: 20px !important;"></span>&nbsp;&nbsp;
+                                    <style>.ls-faq-icon.dashicons { font-size: 20px !important; width: 20px !important; height: 20px !important; }</style>
+                                    <h2 class="hndle">Frequently Asked Questions</h2>
+                                </div>
+                                <div class="inside">
+                                    <div class="ls-accordion">
+                                        
+                                        <div class="ls-accordion-item">
+                                            <div class="ls-accordion-header" data-target="faq-1">
+                                                <span class="ls-accordion-icon">+</span>
+                                                <strong>What's the difference between Pretty Links and regular WordPress permalinks?</strong>
+                                            </div>
+                                            <div class="ls-accordion-content" id="faq-1">
+                                                <p>Pretty Links are completely separate from WordPress permalinks. They're custom short URLs (like <code>/l/summer-sale</code>) that redirect to any URL, internal or external. Perfect for tracking campaigns, affiliate links, or making long URLs shareable.</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="ls-accordion-item">
+                                            <div class="ls-accordion-header" data-target="faq-2">
+                                                <span class="ls-accordion-icon">+</span>
+                                                <strong>Can I track clicks and analytics?</strong>
+                                            </div>
+                                            <div class="ls-accordion-content" id="faq-2">
+                                                <p>Yes! Every click is automatically tracked and stored in your database. You can see click counts, timestamps, and detailed analytics right in your WordPress admin. Perfect for measuring campaign performance.</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="ls-accordion-item">
+                                            <div class="ls-accordion-header" data-target="faq-3">
+                                                <span class="ls-accordion-icon">+</span>
+                                                <strong>Are these links SEO-friendly?</strong>
+                                            </div>
+                                            <div class="ls-accordion-content" id="faq-3">
+                                                <p>Absolutely! All pretty links use proper 301 redirects, which pass SEO juice to the destination URL. Search engines treat them as permanent redirects, maintaining your link authority.</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="ls-accordion-item">
+                                            <div class="ls-accordion-header" data-target="faq-4">
+                                                <span class="ls-accordion-icon">+</span>
+                                                <strong>Can I use UTM parameters and tracking codes?</strong>
+                                            </div>
+                                            <div class="ls-accordion-content" id="faq-4">
+                                                <p>Yes! Paste any URL with UTM parameters, affiliate codes, or tracking parameters as your target URL. The pretty link will cleanly redirect while preserving all tracking information.</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="ls-accordion-item">
+                                            <div class="ls-accordion-header" data-target="faq-5">
+                                                <span class="ls-accordion-icon">+</span>
+                                                <strong>How many links can I create?</strong>
+                                            </div>
+                                            <div class="ls-accordion-content" id="faq-5">
+                                                <p>There's no built-in limit! The system is designed to handle thousands of links efficiently with direct database lookups. Performance scales well with your needs.</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="ls-accordion-item">
+                                            <div class="ls-accordion-header" data-target="faq-6">
+                                                <span class="ls-accordion-icon">+</span>
+                                                <strong>What happens if I delete a pretty link?</strong>
+                                            </div>
+                                            <div class="ls-accordion-content" id="faq-6">
+                                                <p>Once deleted, the pretty link will return a 404 error. However, all click history is preserved in your analytics. Consider editing the target URL instead of deleting if you need to change destinations.</p>
+                                            </div>
+                                        </div>
+                                        
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <style>
+                            .ls-accordion-item {
+                                border-bottom: 1px solid #dcdcde;
+                                margin: 0;
+                            }
+                            .ls-accordion-item:last-child {
+                                border-bottom: none;
+                            }
+                            .ls-accordion-header {
+                                padding: 20px;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: flex-start;
+                                background: #fff;
+                                border: none;
+                                width: 100%;
+                                text-align: left;
+                                font-family: inherit;
+                                transition: background-color 0.15s ease-in-out;
+                                gap: 12px;
+                            }
+                            .ls-accordion-header:hover {
+                                background: #f6f7f7;
+                            }
+                            .ls-accordion-header.active {
+                                background: #f0f6fc;
+                            }
+                            .ls-accordion-icon {
+                                flex-shrink: 0;
+                                width: 20px;
+                                height: 20px;
+                                border-radius: 50%;
+                                background: #2271b1;
+                                color: white;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 14px;
+                                font-weight: 600;
+                                transition: transform 0.2s ease, background-color 0.15s ease;
+                                margin-top: 2px;
+                            }
+                            .ls-accordion-header:hover .ls-accordion-icon {
+                                background: #135e96;
+                            }
+                            .ls-accordion-header.active .ls-accordion-icon {
+                                transform: rotate(45deg);
+                                background: #0073aa;
+                            }
+                            .ls-accordion-content {
+                                display: none;
+                                background: #f9f9f9;
+                                border-top: 1px solid #dcdcde;
+                            }
+                            .ls-accordion-content.active {
+                                display: block;
+                                padding: 20px 20px 24px 52px;
+                            }
+                            .ls-accordion-content p {
+                                margin: 0 0 16px 0;
+                                line-height: 1.6;
+                                color: #50575e;
+                                font-size: 14px;
+                            }
+                            .ls-accordion-content p:last-child {
+                                margin-bottom: 0;
+                            }
+                            .ls-accordion-content code {
+                                background: #fff;
+                                padding: 3px 6px;
+                                border-radius: 3px;
+                                font-size: 13px;
+                                color: #0073aa;
+                                border: 1px solid #dcdcde;
+                                font-family: Consolas, Monaco, monospace;
+                            }
+                            .ls-accordion-header strong {
+                                font-weight: 600;
+                                color: #1d2327;
+                                font-size: 14px;
+                                line-height: 1.4;
+                                flex: 1;
+                            }
+                            </style>
+                            
+                            <script>
+                            jQuery(document).ready(function($) {
+                                // Accordion functionality
+                                $('.ls-accordion-header').click(function() {
+                                    var target = $(this).data('target');
+                                    var content = $('#' + target);
+                                    var icon = $(this).find('.ls-accordion-icon');
+                                    
+                                    if (content.hasClass('active')) {
+                                        // Close this accordion
+                                        content.removeClass('active').slideUp(200);
+                                        $(this).removeClass('active');
+                                    } else {
+                                        // Close all other accordions
+                                        $('.ls-accordion-content.active').removeClass('active').slideUp(200);
+                                        $('.ls-accordion-header.active').removeClass('active');
+                                        
+                                        // Open this accordion
+                                        content.addClass('active').slideDown(200);
+                                        $(this).addClass('active');
+                                    }
+                                });
+                            });
+                            </script>
+                            <?php
+                            
+                            echo '</div>';
+                            break;
+                    }
                     break;
                 /* Future analytics tab
                 case 'analytics':
@@ -528,6 +761,7 @@ document.addEventListener('wpformsSubmit', function (event) {
     private static function render_javascript_tab() {
         ?>
         <?php self::render_quick_start_section(); ?>
+        
         <?php self::render_security_notice(); ?>
         <p>Professional JavaScript injection for advanced lead tracking. Add your custom code below - no &lt;script&gt; tags needed.</p>
         <?php self::render_conflict_detection(); ?>
@@ -716,7 +950,12 @@ document.addEventListener('wpformsSubmit', function (event) {
      * Render UTM history table
      */
     private static function render_utm_history() {
-        $history = get_transient('ls_utm_history') ?: [];
+        // Get UTM history from persistent user meta instead of transient
+        $user_id = get_current_user_id();
+        $history = get_user_meta($user_id, 'ls_utm_history', true);
+        if (!is_array($history)) {
+            $history = [];
+        }
         if (empty($history)) {
             return;
         }
@@ -894,6 +1133,783 @@ document.addEventListener('wpformsSubmit', function (event) {
                 </ul>
             </div>
         </div>
+        <?php
+    }
+
+    /**
+     * Render add new link form
+     */
+    private static function render_add_link_form() {
+        // Get form values to preserve on validation errors
+        $slug = isset($_POST['slug']) ? sanitize_title($_POST['slug']) : '';
+        $target_url = isset($_POST['target_url']) ? esc_url_raw($_POST['target_url']) : '';
+        
+        ?>
+        <div class="wrap">
+            <h1 class="wp-heading-inline">Add New Pretty Link</h1>
+            <a href="<?php echo admin_url('admin.php?page=leadstream-analytics-injector&tab=links'); ?>" class="page-title-action">Back to Links</a>
+            <hr class="wp-header-end">
+            
+            <?php 
+            // Show validation errors using WordPress settings errors
+            settings_errors('leadstream_links'); 
+            ?>
+            
+            <div class="postbox" style="margin-top: 20px;">
+                <div class="postbox-header">
+                <h2 class="hndle">🎯 Create Your Pretty Link</h2>
+                </div>
+                <div class="inside">
+                    
+                    <!-- Introduction -->
+                    <div style="background: #e8f4fd; padding: 20px; border-left: 4px solid #0073aa; margin-bottom: 20px; border-radius: 4px;">
+                        <h3 style="margin-top: 0; color: #0073aa;">Transform Messy URLs into Clean, Trackable Links</h3>
+                        <p style="margin-bottom: 0; font-size: 14px; line-height: 1.5;">
+                            Perfect for social media, email campaigns, and affiliate marketing. Paste any long URL with tracking parameters and we'll create a beautiful, shareable link that's easy to remember and track.
+                        </p>
+                    </div>
+                    
+                    <!-- Real-time Example Box -->
+                    <div id="link-example" style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin-bottom: 20px; border-radius: 4px; display: none;">
+                        <h4 style="margin-top: 0; color: #856404;">📋 What You're Creating:</h4>
+                        <div style="font-family: monospace; font-size: 12px; line-height: 1.6;">
+                            <div style="margin-bottom: 8px;">
+                                <strong style="color: #721c24;">Before (Messy):</strong><br>
+                                <span id="example-messy" style="color: #721c24; word-break: break-all;">Enter your target URL to see preview...</span>
+                            </div>
+                            <div>
+                                <strong style="color: #155724;">After (Clean):</strong><br>
+                                <span id="example-clean" style="color: #155724;"><?php echo esc_url(home_url('/l/')); ?><span id="example-slug">your-slug</span></span> ← Perfect for sharing!
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <form method="post" class="leadstream-admin" id="add-link-form">
+                        <?php wp_nonce_field('ls_add_link', 'ls_add_link_nonce'); ?>
+                        
+                        <table class="form-table" role="presentation">
+                            <tbody>
+                                <tr>
+                                    <th scope="row">
+                                        <label for="slug">Slug <span class="description">(required)</span></label>
+                                    </th>
+                                    <td>
+                                        <input type="text" id="slug" name="slug" class="regular-text" required 
+                                               pattern="[a-z0-9\-]+" 
+                                               title="Only lowercase letters, numbers, and dashes allowed"
+                                               value="<?php echo esc_attr($slug); ?>" 
+                                               placeholder="summer-sale"
+                                               autocomplete="off">
+                                        
+                                        <!-- Live Preview -->
+                                        <div id="slug-preview" style="margin-top: 8px; padding: 8px 12px; background: #f6f7f7; border-left: 4px solid #00a0d2; border-radius: 3px; display: none;">
+                                            <strong>Preview:</strong> <span id="preview-url"><?php echo esc_url(home_url('/l/')); ?></span><strong id="preview-slug"></strong>
+                                        </div>
+                                        
+                                        <!-- Validation feedback -->
+                                        <div id="slug-feedback" style="margin-top: 5px;"></div>
+                                        
+                                        <p class="description">Choose a memorable, SEO-friendly name for your link. Keep it short and descriptive (e.g., 'summer-sale', 'free-guide', 'product-demo')</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">
+                                        <label for="target_url">Target URL <span class="description">(required)</span></label>
+                                    </th>
+                                    <td>
+                                        <input type="url" id="target_url" name="target_url" class="regular-text" required
+                                               value="<?php echo esc_attr($target_url); ?>" 
+                                               placeholder="https://partner.com/product?utm_source=email&utm_campaign=summer&ref=123">
+                                        <p class="description">Paste your long, complex URL here (with UTM parameters, tracking codes, affiliate links, etc.). We'll turn it into a clean, shareable link that's perfect for social media and email campaigns.</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        
+                        <p class="submit">
+                            <?php submit_button('Add Pretty Link', 'primary', 'submit', false); ?>
+                            <a href="<?php echo admin_url('admin.php?page=leadstream-analytics-injector&tab=links'); ?>" class="button button-secondary" style="margin-left: 10px;">Cancel</a>
+                        </p>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <script>
+        jQuery(document).ready(function($) {
+            const slugInput = $('#slug');
+            const previewDiv = $('#slug-preview');
+            const previewSlug = $('#preview-slug');
+            const feedbackDiv = $('#slug-feedback');
+            let checkTimeout;
+            
+            // Live preview as user types
+            slugInput.on('input', function() {
+                const value = $(this).val().toLowerCase().replace(/[^a-z0-9\-]/g, '');
+                $(this).val(value); // Auto-clean the input
+                
+                if (value.length > 0) {
+                    previewSlug.text(value);
+                    previewDiv.show();
+                    
+                    // Clear previous timeout
+                    clearTimeout(checkTimeout);
+                    
+                    // Check availability after user stops typing
+                    checkTimeout = setTimeout(function() {
+                        checkSlugAvailability(value);
+                    }, 500);
+                } else {
+                    previewDiv.hide();
+                    feedbackDiv.html('');
+                }
+            });
+            
+            // Check slug availability via AJAX
+            function checkSlugAvailability(slug) {
+                if (slug.length < 2) return;
+                
+                feedbackDiv.html('<span style="color: #666;">⏳ Checking availability...</span>');
+                
+                $.post(ajaxurl, {
+                    action: 'check_slug_availability',
+                    slug: slug,
+                    nonce: '<?php echo wp_create_nonce('ls_check_slug'); ?>'
+                })
+                .done(function(response) {
+                    if (response.success) {
+                        if (response.data.available) {
+                            feedbackDiv.html('<span style="color: #00a32a;">✓ Available</span>');
+                        } else {
+                            feedbackDiv.html('<span style="color: #d63638;">✗ Already taken</span>');
+                        }
+                    }
+                })
+                .fail(function() {
+                    feedbackDiv.html('<span style="color: #666;">Could not check availability</span>');
+                });
+            }
+            
+            // Pre-populate if there's an existing value
+            if (slugInput.val()) {
+                slugInput.trigger('input');
+            }
+        });
+        </script>
+        <?php
+    }
+
+    /**
+     * Render edit link form
+     */
+    private static function render_edit_link_form() {
+        $id = intval($_GET['id'] ?? 0);
+        if (!$id) {
+            wp_die('Invalid link ID');
+        }
+
+        global $wpdb;
+        $link = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}ls_links WHERE id = %d",
+            $id
+        ));
+
+        if (!$link) {
+            wp_die('Link not found');
+        }
+
+        ?>
+        <div class="wrap">
+            <h1 class="wp-heading-inline">Edit Pretty Link</h1>
+            <a href="<?php echo admin_url('admin.php?page=leadstream-analytics-injector&tab=links'); ?>" class="page-title-action">Back to Links</a>
+            <hr class="wp-header-end">
+            
+            <?php 
+            // Show validation errors using WordPress settings errors
+            settings_errors('leadstream_links'); 
+            ?>
+            
+            <div class="postbox" style="margin-top: 20px;">
+                <div class="postbox-header">
+                    <h2 class="hndle">Link Settings</h2>
+                </div>
+                <div class="inside">
+                    <form method="post" class="leadstream-admin" id="edit-link-form">
+                        <input type="hidden" name="id" value="<?php echo esc_attr($link->id); ?>">
+                        <?php wp_nonce_field('ls_edit_link', 'ls_edit_link_nonce'); ?>
+                        
+                        <table class="form-table" role="presentation">
+                            <tbody>
+                                <tr>
+                                    <th scope="row">
+                                        <label for="slug">Slug <span class="description">(required)</span></label>
+                                    </th>
+                                    <td>
+                                        <input type="text" id="slug" name="slug" class="regular-text" required 
+                                               pattern="[a-z0-9\-]+" 
+                                               title="Only lowercase letters, numbers, and dashes allowed"
+                                               value="<?php echo esc_attr($link->slug); ?>"
+                                               autocomplete="off">
+                                        
+                                        <!-- Live Preview -->
+                                        <div id="slug-preview" style="margin-top: 8px; padding: 8px 12px; background: #f6f7f7; border-left: 4px solid #00a0d2; border-radius: 3px;">
+                                            <strong>Current:</strong> <span id="preview-url"><?php echo esc_url(home_url('/l/')); ?></span><strong id="preview-slug"><?php echo esc_html($link->slug); ?></strong>
+                                        </div>
+                                        
+                                        <!-- Validation feedback -->
+                                        <div id="slug-feedback" style="margin-top: 5px;"></div>
+                                        
+                                        <p class="description">Only lowercase letters, numbers, and dashes. Currently: <code>/l/<?php echo esc_html($link->slug); ?></code></p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">
+                                        <label for="target_url">Target URL <span class="description">(required)</span></label>
+                                    </th>
+                                    <td>
+                                        <input type="url" id="target_url" name="target_url" class="regular-text" required
+                                               value="<?php echo esc_attr($link->target_url); ?>">
+                                        <p class="description">The full URL to redirect to when someone visits your pretty link.</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        
+                        <p class="submit">
+                            <?php submit_button('Update Pretty Link', 'primary', 'submit', false); ?>
+                            <a href="<?php echo admin_url('admin.php?page=leadstream-analytics-injector&tab=links'); ?>" class="button button-secondary" style="margin-left: 10px;">Cancel</a>
+                        </p>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <script>
+        jQuery(document).ready(function($) {
+            const slugInput = $('#slug');
+            const previewSlug = $('#preview-slug');
+            const feedbackDiv = $('#slug-feedback');
+            const originalSlug = '<?php echo esc_js($link->slug); ?>';
+            let checkTimeout;
+            
+            // Live preview as user types
+            slugInput.on('input', function() {
+                const value = $(this).val().toLowerCase().replace(/[^a-z0-9\-]/g, '');
+                $(this).val(value); // Auto-clean the input
+                
+                if (value.length > 0) {
+                    previewSlug.text(value);
+                    
+                    // Clear previous timeout
+                    clearTimeout(checkTimeout);
+                    
+                    // Check availability after user stops typing (only if different from original)
+                    if (value !== originalSlug) {
+                        checkTimeout = setTimeout(function() {
+                            checkSlugAvailability(value, originalSlug);
+                        }, 500);
+                    } else {
+                        feedbackDiv.html('<span style="color: #666;">Current slug</span>');
+                    }
+                } else {
+                    feedbackDiv.html('');
+                }
+            });
+            
+            // Check slug availability via AJAX
+            function checkSlugAvailability(slug, excludeSlug) {
+                if (slug.length < 2) return;
+                
+                feedbackDiv.html('<span style="color: #666;">⏳ Checking availability...</span>');
+                
+                $.post(ajaxurl, {
+                    action: 'check_slug_availability',
+                    slug: slug,
+                    exclude: excludeSlug,
+                    nonce: '<?php echo wp_create_nonce('ls_check_slug'); ?>'
+                })
+                .done(function(response) {
+                    if (response.success) {
+                        if (response.data.available) {
+                            feedbackDiv.html('<span style="color: #00a32a;">✓ Available</span>');
+                        } else {
+                            feedbackDiv.html('<span style="color: #d63638;">✗ Already taken</span>');
+                        }
+                    }
+                })
+                .fail(function() {
+                    feedbackDiv.html('<span style="color: #666;">Could not check availability</span>');
+                });
+            }
+            
+            // Update real-time example when fields change
+            $('#slug, #target_url').on('input', function() {
+                updateLinkExample();
+            });
+            
+            function updateLinkExample() {
+                var slug = $('#slug').val();
+                var targetUrl = $('#target_url').val();
+                
+                if (slug && targetUrl) {
+                    $('#link-example').show();
+                    $('#example-messy').text(targetUrl);
+                    $('#example-slug').text(slug);
+                } else {
+                    $('#link-example').hide();
+                }
+            }
+        });
+        </script>
+        <?php
+    }
+
+    /**
+     * Handle Pretty Links form submissions early (before any output)
+     */
+    private static function handle_pretty_links_form_submission_early() {
+        if (!current_user_can('manage_options')) {
+            wp_die('Permission denied');
+        }
+
+        // Handle Add New Link
+        if (isset($_POST['ls_add_link_nonce']) && wp_verify_nonce($_POST['ls_add_link_nonce'], 'ls_add_link')) {
+            $slug = sanitize_title($_POST['slug'] ?? '');
+            $target_url = esc_url_raw($_POST['target_url'] ?? '');
+            
+            // Use WP_Error for better error handling
+            $errors = new \WP_Error();
+            
+            // Validate slug
+            if (empty($slug)) {
+                $errors->add('slug_empty', 'Slug is required.');
+            } elseif (!preg_match('/^[a-z0-9\-]+$/', $slug)) {
+                $errors->add('slug_invalid', 'Slug can only contain lowercase letters, numbers, and dashes.');
+            }
+            
+            // Validate URL
+            if (empty($target_url)) {
+                $errors->add('url_empty', 'Target URL is required.');
+            } elseif (!filter_var($target_url, FILTER_VALIDATE_URL)) {
+                $errors->add('url_invalid', 'Please enter a valid URL (including http:// or https://).');
+            }
+            
+            // Check for duplicate slug
+            if (!$errors->has_errors()) {
+                global $wpdb;
+                $existing = $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$wpdb->prefix}ls_links WHERE slug = %s",
+                    $slug
+                ));
+                
+                if ($existing > 0) {
+                    $errors->add('slug_exists', 'That slug is already in use. Please try another.');
+                }
+            }
+            
+            // Process if no errors
+            if (!$errors->has_errors()) {
+                try {
+                    global $wpdb;
+                    // Insert the new link
+                    $result = $wpdb->insert(
+                        $wpdb->prefix . 'ls_links',
+                        [
+                            'slug' => $slug,
+                            'target_url' => $target_url,
+                            'created_at' => current_time('mysql')
+                        ],
+                        ['%s', '%s', '%s']
+                    );
+                    
+                    if ($result !== false) {
+                        // Store last used slug in user meta for persistence
+                        $user_id = get_current_user_id();
+                        update_user_meta($user_id, 'ls_last_pretty_link', $slug);
+                        
+                        // Use nocache_headers to prevent caching issues
+                        nocache_headers();
+                        wp_redirect(admin_url('admin.php?page=leadstream-analytics-injector&tab=links&added=' . urlencode($slug)));
+                        exit;
+                    } else {
+                        $errors->add('db_error', 'Database error: Could not create the link.');
+                    }
+                } catch (Exception $e) {
+                    error_log('LeadStream DB Insert Error: ' . $e->getMessage());
+                    $errors->add('db_exception', 'An unexpected error occurred. Please try again.');
+                }
+            }
+            
+            // Store errors for display using WordPress settings errors
+            if ($errors->has_errors()) {
+                foreach ($errors->get_error_messages() as $message) {
+                    add_settings_error('leadstream_links', '', $message, 'error');
+                }
+            }
+        }
+        
+        // Handle Edit Link
+        if (isset($_POST['ls_edit_link_nonce']) && wp_verify_nonce($_POST['ls_edit_link_nonce'], 'ls_edit_link')) {
+            $id = intval($_POST['id'] ?? 0);
+            $slug = sanitize_title($_POST['slug'] ?? '');
+            $target_url = esc_url_raw($_POST['target_url'] ?? '');
+            
+            // Use WP_Error for better error handling
+            $errors = new \WP_Error();
+            
+            // Validate ID
+            if (!$id) {
+                $errors->add('id_invalid', 'Invalid link ID.');
+            }
+            
+            // Validate slug
+            if (empty($slug)) {
+                $errors->add('slug_empty', 'Slug is required.');
+            } elseif (!preg_match('/^[a-z0-9\-]+$/', $slug)) {
+                $errors->add('slug_invalid', 'Slug can only contain lowercase letters, numbers, and dashes.');
+            }
+            
+            // Validate URL
+            if (empty($target_url)) {
+                $errors->add('url_empty', 'Target URL is required.');
+            } elseif (!filter_var($target_url, FILTER_VALIDATE_URL)) {
+                $errors->add('url_invalid', 'Please enter a valid URL (including http:// or https://).');
+            }
+            
+            // Check for duplicate slug (excluding current link)
+            if (!$errors->has_errors()) {
+                global $wpdb;
+                $existing = $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$wpdb->prefix}ls_links WHERE slug = %s AND id != %d",
+                    $slug,
+                    $id
+                ));
+                
+                if ($existing > 0) {
+                    $errors->add('slug_exists', 'That slug is already in use. Please try another.');
+                }
+            }
+            
+            // Process if no errors
+            if (!$errors->has_errors()) {
+                try {
+                    global $wpdb;
+                    // Update the link
+                    $result = $wpdb->update(
+                        $wpdb->prefix . 'ls_links',
+                        [
+                            'slug' => $slug,
+                            'target_url' => $target_url,
+                        ],
+                        ['id' => $id],
+                        ['%s', '%s'],
+                        ['%d']
+                    );
+                    
+                    if ($result !== false) {
+                        // Store last used slug in user meta for persistence
+                        $user_id = get_current_user_id();
+                        update_user_meta($user_id, 'ls_last_pretty_link', $slug);
+                        
+                        // Use nocache_headers to prevent caching issues
+                        nocache_headers();
+                        wp_redirect(admin_url('admin.php?page=leadstream-analytics-injector&tab=links&updated=' . urlencode($slug)));
+                        exit;
+                    } else {
+                        $errors->add('db_error', 'Database error: Could not update the link.');
+                    }
+                } catch (Exception $e) {
+                    error_log('LeadStream DB Update Error: ' . $e->getMessage());
+                    $errors->add('db_exception', 'An unexpected error occurred. Please try again.');
+                }
+            }
+            
+            // Store errors for display using WordPress settings errors
+            if ($errors->has_errors()) {
+                foreach ($errors->get_error_messages() as $message) {
+                    add_settings_error('leadstream_links', '', $message, 'error');
+                }
+            }
+        }
+    }
+
+    /**
+     * Show Pretty Links admin notices
+     */
+    private static function show_pretty_links_notices() {
+        // Show settings errors (validation errors)
+        settings_errors('leadstream_links');
+        
+        // Success messages with test links
+        if (isset($_GET['added']) && !empty($_GET['added'])) {
+            $slug = sanitize_text_field($_GET['added']);
+            printf(
+                '<div class="notice notice-success is-dismissible">
+                    <p><strong>Success!</strong> Pretty Link <strong>%s</strong> added successfully! 
+                       <a href="%s" target="_blank" class="button button-small">Test it →</a>
+                    </p>
+                 </div>',
+                esc_html($slug),
+                esc_url(home_url("/l/{$slug}"))
+            );
+        }
+        
+        if (isset($_GET['updated']) && !empty($_GET['updated'])) {
+            $slug = sanitize_text_field($_GET['updated']);
+            printf(
+                '<div class="notice notice-success is-dismissible">
+                    <p><strong>Success!</strong> Pretty Link <strong>%s</strong> updated successfully! 
+                       <a href="%s" target="_blank" class="button button-small">Test it →</a>
+                    </p>
+                 </div>',
+                esc_html($slug),
+                esc_url(home_url("/l/{$slug}"))
+            );
+        }
+        
+        if (isset($_GET['deleted']) && $_GET['deleted'] == '1') {
+            echo '<div class="notice notice-success is-dismissible">
+                    <p><strong>Success!</strong> Pretty Link deleted successfully!</p>
+                  </div>';
+        }
+    }
+
+    /**
+     * Handle adding new pretty link (DEPRECATED - kept for backward compatibility)
+     */
+    public static function handle_add_pretty_link() {
+        if (!wp_verify_nonce($_POST['add_pretty_link_nonce'], 'add_pretty_link')) {
+            wp_die('Security check failed');
+        }
+
+        if (!current_user_can('manage_options')) {
+            wp_die('Permission denied');
+        }
+
+        $slug = sanitize_text_field($_POST['slug']);
+        $target_url = esc_url_raw($_POST['target_url']);
+
+        if (empty($slug) || empty($target_url)) {
+            wp_redirect(admin_url('admin.php?page=leadstream-analytics-injector&tab=links&action=add&error=missing_fields'));
+            exit;
+        }
+
+        global $wpdb;
+        $result = $wpdb->insert(
+            $wpdb->prefix . 'ls_links',
+            [
+                'slug' => $slug,
+                'target_url' => $target_url,
+            ],
+            ['%s', '%s']
+        );
+
+        if ($result === false) {
+            wp_redirect(admin_url('admin.php?page=leadstream-analytics-injector&tab=links&action=add&error=duplicate_slug'));
+            exit;
+        }
+
+        wp_redirect(admin_url('admin.php?page=leadstream-analytics-injector&tab=links&message=added'));
+        exit;
+    }
+
+    /**
+     * Handle editing pretty link (DEPRECATED - kept for backward compatibility)
+     */
+    public static function handle_edit_pretty_link() {
+        if (!wp_verify_nonce($_POST['edit_pretty_link_nonce'], 'edit_pretty_link')) {
+            wp_die('Security check failed');
+        }
+
+        if (!current_user_can('manage_options')) {
+            wp_die('Permission denied');
+        }
+
+        $id = intval($_POST['id']);
+        $slug = sanitize_text_field($_POST['slug']);
+        $target_url = esc_url_raw($_POST['target_url']);
+
+        if (!$id || empty($slug) || empty($target_url)) {
+            wp_redirect(admin_url('admin.php?page=leadstream-analytics-injector&tab=links&error=missing_fields'));
+            exit;
+        }
+
+        global $wpdb;
+        $result = $wpdb->update(
+            $wpdb->prefix . 'ls_links',
+            [
+                'slug' => $slug,
+                'target_url' => $target_url,
+            ],
+            ['id' => $id],
+            ['%s', '%s'],
+            ['%d']
+        );
+
+        wp_redirect(admin_url('admin.php?page=leadstream-analytics-injector&tab=links&message=updated'));
+        exit;
+    }
+
+    /**
+     * Show Pretty Links statistics summary
+     */
+    private static function show_pretty_links_stats() {
+        global $wpdb;
+        
+        // Get basic stats
+        $total_links = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}ls_links");
+        $total_clicks = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}ls_clicks");
+        $clicks_today = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}ls_clicks WHERE DATE(clicked_at) = %s",
+            current_time('Y-m-d')
+        ));
+        $clicks_this_week = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}ls_clicks WHERE clicked_at >= %s",
+            date('Y-m-d', strtotime('-7 days'))
+        ));
+        
+        // Get most popular link
+        $popular_link = $wpdb->get_row(
+            "SELECT l.slug, COUNT(c.id) as click_count 
+             FROM {$wpdb->prefix}ls_links l 
+             LEFT JOIN {$wpdb->prefix}ls_clicks c ON l.id = c.link_id 
+             GROUP BY l.id 
+             ORDER BY click_count DESC 
+             LIMIT 1"
+        );
+        
+        if ($total_links == 0) {
+            return; // Don't show stats if no links exist
+        }
+        
+        ?>
+        <div class="leadstream-stats-summary" style="margin: 20px 0; display: flex; gap: 15px; flex-wrap: wrap;">
+            <div class="stat-box" style="background: #fff; border: 1px solid #c3c4c7; border-radius: 4px; padding: 15px; min-width: 140px; text-align: center; box-shadow: 0 1px 1px rgba(0,0,0,0.04);">
+                <div style="font-size: 24px; font-weight: 600; color: #2271b1; line-height: 1;"><?php echo number_format($total_links); ?></div>
+                <div style="font-size: 13px; color: #646970; margin-top: 4px;">Total Links</div>
+            </div>
+            
+            <div class="stat-box" style="background: #fff; border: 1px solid #c3c4c7; border-radius: 4px; padding: 15px; min-width: 140px; text-align: center; box-shadow: 0 1px 1px rgba(0,0,0,0.04);">
+                <div style="font-size: 24px; font-weight: 600; color: #00a32a; line-height: 1;"><?php echo number_format($total_clicks); ?></div>
+                <div style="font-size: 13px; color: #646970; margin-top: 4px;">Total Clicks</div>
+            </div>
+            
+            <div class="stat-box" style="background: #fff; border: 1px solid #c3c4c7; border-radius: 4px; padding: 15px; min-width: 140px; text-align: center; box-shadow: 0 1px 1px rgba(0,0,0,0.04);">
+                <div style="font-size: 24px; font-weight: 600; color: #dba617; line-height: 1;"><?php echo number_format($clicks_today); ?></div>
+                <div style="font-size: 13px; color: #646970; margin-top: 4px;">Today</div>
+            </div>
+            
+            <div class="stat-box" style="background: #fff; border: 1px solid #c3c4c7; border-radius: 4px; padding: 15px; min-width: 140px; text-align: center; box-shadow: 0 1px 1px rgba(0,0,0,0.04);">
+                <div style="font-size: 24px; font-weight: 600; color: #72aee6; line-height: 1;"><?php echo number_format($clicks_this_week); ?></div>
+                <div style="font-size: 13px; color: #646970; margin-top: 4px;">This Week</div>
+            </div>
+            
+            <?php if ($popular_link && $popular_link->click_count > 0): ?>
+            <div class="stat-box" style="background: #fff; border: 1px solid #c3c4c7; border-radius: 4px; padding: 15px; min-width: 180px; text-align: center; box-shadow: 0 1px 1px rgba(0,0,0,0.04);">
+                <div style="font-size: 16px; font-weight: 600; color: #1d2327; line-height: 1; font-family: Consolas, Monaco, monospace;">/l/<?php echo esc_html($popular_link->slug); ?></div>
+                <div style="font-size: 13px; color: #646970; margin-top: 4px;">Most Popular (<?php echo number_format($popular_link->click_count); ?> clicks)</div>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+
+    /**
+     * AJAX handler for checking slug availability
+     */
+    public static function ajax_check_slug_availability() {
+        // Security check
+        if (!wp_verify_nonce($_POST['nonce'], 'ls_check_slug')) {
+            wp_send_json_error('Invalid nonce');
+        }
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        $slug = sanitize_title($_POST['slug'] ?? '');
+        $exclude = sanitize_title($_POST['exclude'] ?? '');
+        
+        if (empty($slug)) {
+            wp_send_json_error('Invalid slug');
+        }
+        
+        global $wpdb;
+        
+        // For edit forms, exclude the current slug from the check
+        if (!empty($exclude)) {
+            $existing = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->prefix}ls_links WHERE slug = %s AND slug != %s",
+                $slug,
+                $exclude
+            ));
+        } else {
+            $existing = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->prefix}ls_links WHERE slug = %s",
+                $slug
+            ));
+        }
+        
+        wp_send_json_success([
+            'available' => ($existing == 0),
+            'slug' => $slug
+        ]);
+    }
+
+    /**
+     * Render Pretty Links helper section for JavaScript injection
+     */
+    private static function render_pretty_links_helper() {
+        global $wpdb;
+        
+        // Get user's last used pretty link
+        $user_id = get_current_user_id();
+        $last_slug = get_user_meta($user_id, 'ls_last_pretty_link', true);
+        
+        // Get all available pretty links
+        $all_links = $wpdb->get_results(
+            "SELECT slug, target_url FROM {$wpdb->prefix}ls_links ORDER BY created_at DESC LIMIT 20"
+        );
+        
+        if (empty($all_links)) {
+            return; // Don't show if no links exist
+        }
+        
+        ?>
+        <div class="leadstream-pretty-links-helper" style="margin:20px 0; padding:15px; background:#f8f9fa; border-left:4px solid #00a0d2; border-radius:4px;">
+            <h3 style="margin-top:0;">🎯 Quick Access: Your Pretty Links</h3>
+            <p>Use these short links in your tracking code, social media, or anywhere you need clean URLs:</p>
+            
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0;">
+                <?php foreach ($all_links as $link): ?>
+                    <div class="pretty-link-item" style="background: white; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;" 
+                         onclick="copyToClipboard('<?php echo esc_js(home_url("/l/{$link->slug}")); ?>')">
+                        <code>/l/<?php echo esc_html($link->slug); ?></code>
+                        <span style="font-size: 12px; color: #666; margin-left: 8px;">→ <?php echo esc_html(wp_trim_words($link->target_url, 6, '...')); ?></span>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            
+            <p style="margin-bottom: 0;">
+                <small style="color: #666;">💡 Click any link to copy to clipboard. 
+                <a href="<?php echo admin_url('admin.php?page=leadstream-analytics-injector&tab=links'); ?>">Manage all links →</a></small>
+            </p>
+        </div>
+        
+        <script>
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                // Show success feedback
+                const temp = event.target.style.background;
+                event.target.style.background = '#00a32a';
+                event.target.style.color = 'white';
+                setTimeout(function() {
+                    event.target.style.background = temp;
+                    event.target.style.color = '';
+                }, 500);
+            });
+        }
+        </script>
         <?php
     }
 }
