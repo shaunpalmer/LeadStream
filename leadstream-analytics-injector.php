@@ -18,9 +18,11 @@ require_once plugin_dir_path(__FILE__) . 'includes/Utils.php';
 if (is_admin()) {
     require_once plugin_dir_path(__FILE__) . 'includes/Admin/Assets.php';
     require_once plugin_dir_path(__FILE__) . 'includes/Admin/Settings.php';
+    require_once plugin_dir_path(__FILE__) . 'includes/Admin/LinksDashboard.php';
     require_once plugin_dir_path(__FILE__) . 'includes/AJAX/UTMHandler.php';
     \LS\Admin\Assets::init();
     \LS\Admin\Settings::init(); // ACTIVATED: New modular settings handler
+    \LS\Admin\LinksDashboard::init(); // ACTIVATED: Pretty Links management
     \LS\AJAX\UTMHandler::init(); // ACTIVATED: UTM Builder AJAX handler
 }
 
