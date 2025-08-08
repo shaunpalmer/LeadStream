@@ -1,0 +1,88 @@
+<?php
+namespace LS\Frontend;
+
+/**
+ * Handles pretty-link redirects and click logging.
+ * Follows WordPress best practices with proper OOP structure.
+ */
+class RedirectHandler {
+
+  /**
+   * Hook our rewrite rule, query var, and redirect logic.
+   */
+  public static function init() {
+    // 1. Add custom query var
+    add_filter( 'query_vars', [ __CLASS__, 'add_query_var' ] );
+
+    // 2. Register rewrite rule: /l/{slug}
+    add_action( 'init', [ __CLASS__, 'add_rewrite_rule' ] );
+
+    // 3. Perform redirect & logging as early as possible
+    add_action( 'template_redirect', [ __CLASS__, 'maybe_redirect' ], 0 );
+  }
+
+  /**
+   * Allow 'ls_link' as a valid query var.
+   *
+   * @param array $vars Existing query vars.
+   * @return array Modified query vars.
+   */
+  public static function add_query_var( $vars ) {
+    $vars[] = 'ls_link';
+    return $vars;
+  }
+
+  /**
+   * Register the rewrite rule for slug-based links.
+   * Matches URLs like /l/my-slug/ and maps to index.php?ls_link=my-slug
+   */
+  public static function add_rewrite_rule() {
+    add_rewrite_rule(
+      '^l/([^/]+)/?$',
+      'index.php?ls_link=$matches[1]',
+      'top'
+    );
+  }
+
+  /**
+   * If 'ls_link' is present, look up the target, log the click, and redirect.
+   */
+  public static function maybe_redirect() {
+    $slug = get_query_var( 'ls_link' );
+    if ( empty( $slug ) ) {
+      return;
+    }
+
+    global $wpdb;
+
+    // Fetch link record
+    $table = $wpdb->prefix . 'ls_links';
+    $link  = $wpdb->get_row(
+      $wpdb->prepare(
+        "SELECT id, target_url FROM {$table} WHERE slug = %s LIMIT 1",
+        $slug
+      )
+    );
+
+    if ( ! $link ) {
+      // No matching slug—let WP handle 404 normally
+      return;
+    }
+
+    // Log the click
+    $clicks_table = $wpdb->prefix . 'ls_clicks';
+    $wpdb->insert(
+      $clicks_table,
+      [
+        'link_id'    => $link->id,
+        'ip_address' => $_SERVER['REMOTE_ADDR'] ?? '',
+        'user_agent' => substr( $_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255 ),
+      ],
+      [ '%d', '%s', '%s' ]
+    );
+
+    // Perform a 301 redirect to the target URL
+    wp_redirect( $link->target_url, 301 );
+    exit;
+  }
+}

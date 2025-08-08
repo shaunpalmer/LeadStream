@@ -127,7 +127,11 @@ class Settings {
                    class="nav-tab <?php echo $current_tab === 'utm' ? 'nav-tab-active' : ''; ?>">
                     🔗 UTM Builder
                 </a>
-                <!-- Future third tab placeholder -->
+                <a href="<?php echo add_query_arg('tab', 'links', admin_url('admin.php?page=leadstream-analytics-injector')); ?>" 
+                   class="nav-tab <?php echo $current_tab === 'links' ? 'nav-tab-active' : ''; ?>">
+                    🎯 Pretty Links
+                </a>
+                <!-- Future analytics tab placeholder -->
                 <?php /* 
                 <a href="<?php echo add_query_arg('tab', 'analytics', admin_url('admin.php?page=leadstream-analytics-injector')); ?>" 
                    class="nav-tab <?php echo $current_tab === 'analytics' ? 'nav-tab-active' : ''; ?>">
@@ -142,7 +146,10 @@ class Settings {
                 case 'utm':
                     self::render_utm_tab();
                     break;
-                /* Future third tab
+                case 'links':
+                    self::render_links_tab();
+                    break;
+                /* Future analytics tab
                 case 'analytics':
                     self::render_analytics_tab();
                     break;
@@ -834,6 +841,47 @@ document.addEventListener('wpformsSubmit', function (event) {
                 });
             });
             </script>
+        </div>
+        <?php
+    }
+
+    /**
+     * Render Pretty Links tab
+     */
+    private static function render_links_tab() {
+        ?>
+        <div class="leadstream-pretty-links">
+            <h2>🎯 Pretty Links Dashboard</h2>
+            <p>Create, manage, and track short links with detailed click analytics.</p>
+            
+            <div style="background: #f0f8ff; padding: 20px; border-left: 4px solid #0073aa; margin: 20px 0;">
+                <h3 style="margin-top: 0;">📋 Coming Soon</h3>
+                <p>The Pretty Links feature will include:</p>
+                <ul>
+                    <li><strong>Short Link Creation:</strong> Convert long URLs to <code>/l/slug</code> format</li>
+                    <li><strong>Click Analytics:</strong> Track clicks, IP addresses, and user agents</li>
+                    <li><strong>Performance Dashboard:</strong> View top-performing links and click trends</li>
+                    <li><strong>Bulk Management:</strong> Create, edit, and delete links in bulk</li>
+                </ul>
+                <p><em>This feature is being developed with custom database tables for maximum performance and scalability.</em></p>
+            </div>
+
+            <div style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0;">
+                <h4 style="margin-top: 0;">🔧 Technical Implementation</h4>
+                <p>Pretty Links uses:</p>
+                <ul>
+                    <li><strong>Custom DB Tables:</strong> <code>ls_links</code> and <code>ls_clicks</code> for optimal performance</li>
+                    <li><strong>WordPress Rewrite Rules:</strong> Clean <code>/l/slug</code> URLs</li>
+                    <li><strong>OOP Architecture:</strong> Modular, maintainable code following WordPress standards</li>
+                    <li><strong>WP_List_Table:</strong> Native WordPress admin interface</li>
+                </ul>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+                <button type="button" class="button button-primary button-large" disabled>
+                    🚀 Launch Link Manager (Coming Soon)
+                </button>
+            </div>
         </div>
         <?php
     }

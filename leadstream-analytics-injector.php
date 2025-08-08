@@ -24,8 +24,18 @@ if (is_admin()) {
     \LS\AJAX\UTMHandler::init(); // ACTIVATED: UTM Builder AJAX handler
 }
 
+// Define this constant so Installer can hook into activation
+define( 'LS_FILE', __FILE__ );
+
+// Load Setup and Frontend components
+require_once plugin_dir_path(__FILE__) . 'includes/Setup/Installer.php';
 require_once plugin_dir_path(__FILE__) . 'includes/Frontend/Injector.php';
+require_once plugin_dir_path(__FILE__) . 'includes/Frontend/RedirectHandler.php';
+
+// Initialize components
+\LS\Setup\Installer::init();
 \LS\Frontend\Injector::init();
+\LS\Frontend\RedirectHandler::init();
 
 // === CLEAN MODULAR ARCHITECTURE ===
 // All legacy functions have been successfully migrated to modular classes
