@@ -14,6 +14,7 @@ class Assets {
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_code_editor']);
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_admin_styles']);
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_admin_scripts']);
+        add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_utm_builder']);
     }
     
     /**
@@ -218,5 +219,37 @@ JS;
             '2.6.4-' . time(), // Force cache refresh with timestamp
             true // Load in footer
         );
+    }
+
+    /**
+     * Enqueue UTM builder scripts on the UTM tab
+     */
+    public static function enqueue_utm_builder($hook) {
+        // Only on the LeadStream settings page
+        if ($hook !== 'toplevel_page_leadstream-analytics-injector') {
+            return;
+        }
+
+        // Only if we're on the UTM tab
+        if (!isset($_GET['tab']) || $_GET['tab'] !== 'utm') {
+            return;
+        }
+
+        $plugin_url = plugin_dir_url(dirname(dirname(__FILE__)));
+        $plugin_dir = plugin_dir_path(dirname(dirname(__FILE__)));
+        
+        wp_enqueue_script(
+            'leadstream-utm-builder',
+            $plugin_url . 'assets/js/utm-builder.js',
+            ['jquery'],
+            filemtime($plugin_dir . 'assets/js/utm-builder.js'),
+            true
+        );
+
+        // Add localized data for AJAX
+        wp_localize_script('leadstream-utm-builder', 'leadstream_utm_ajax', [
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('leadstream_utm_nonce')
+        ]);
     }
 }

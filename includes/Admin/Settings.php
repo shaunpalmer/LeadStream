@@ -108,24 +108,51 @@ class Settings {
         if (!current_user_can('manage_options')) {
             wp_die('You do not have sufficient permissions to access this page.');
         }
+        
+        // Get current tab
+        $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'javascript';
+        
         ?>
         <div class="wrap">
             <h1>LeadStream: Advanced Analytics Injector</h1>
             <?php settings_errors(); ?>
-            <?php self::render_quick_start_section(); ?>
-            <?php self::render_security_notice(); ?>
-            <p>Professional JavaScript injection for advanced lead tracking. Add your custom code below - no &lt;script&gt; tags needed.</p>
-            <?php self::render_conflict_detection(); ?>
-            <form action='options.php' method='post'>
-                <?php settings_fields('lead-tracking-js-settings-group'); ?>
-                <div class="leadstream-admin">
-                    <?php self::render_javascript_section(); ?>
-                    <?php self::render_gtm_section(); ?>
-                    <?php self::render_injection_settings(); ?>
-                </div>
-                <?php submit_button('Save JavaScript'); ?>
-            </form>
-            <?php self::render_faq_section(); ?>
+            
+            <!-- Tab Navigation -->
+            <nav class="nav-tab-wrapper">
+                <a href="<?php echo add_query_arg('tab', 'javascript', admin_url('admin.php?page=leadstream-analytics-injector')); ?>" 
+                   class="nav-tab <?php echo $current_tab === 'javascript' ? 'nav-tab-active' : ''; ?>">
+                    📝 JavaScript Injection
+                </a>
+                <a href="<?php echo add_query_arg('tab', 'utm', admin_url('admin.php?page=leadstream-analytics-injector')); ?>" 
+                   class="nav-tab <?php echo $current_tab === 'utm' ? 'nav-tab-active' : ''; ?>">
+                    🔗 UTM Builder
+                </a>
+                <!-- Future third tab placeholder -->
+                <?php /* 
+                <a href="<?php echo add_query_arg('tab', 'analytics', admin_url('admin.php?page=leadstream-analytics-injector')); ?>" 
+                   class="nav-tab <?php echo $current_tab === 'analytics' ? 'nav-tab-active' : ''; ?>">
+                    📊 Analytics Dashboard
+                </a>
+                */ ?>
+            </nav>
+            
+            <?php
+            // Display tab content
+            switch ($current_tab) {
+                case 'utm':
+                    self::render_utm_tab();
+                    break;
+                /* Future third tab
+                case 'analytics':
+                    self::render_analytics_tab();
+                    break;
+                */
+                case 'javascript':
+                default:
+                    self::render_javascript_tab();
+                    break;
+            }
+            ?>
         </div>
         <?php
     }
@@ -485,6 +512,329 @@ document.addEventListener('wpformsSubmit', function (event) {
         .ls-accordion-panel { display: none; padding: 14px 18px; background: #f7f7f7; }
         .ls-copy-btn { margin-top: 10px; margin-right: 8px; background: #27ae60; color: #fff; border: none; padding: 7px 16px; border-radius: 4px; cursor: pointer; }
         </style>
+        <?php
+    }
+
+    /**
+     * Render the JavaScript injection tab
+     */
+    private static function render_javascript_tab() {
+        ?>
+        <?php self::render_quick_start_section(); ?>
+        <?php self::render_security_notice(); ?>
+        <p>Professional JavaScript injection for advanced lead tracking. Add your custom code below - no &lt;script&gt; tags needed.</p>
+        <?php self::render_conflict_detection(); ?>
+        <form action='options.php' method='post'>
+            <?php settings_fields('lead-tracking-js-settings-group'); ?>
+            <div class="leadstream-admin">
+                <?php self::render_javascript_section(); ?>
+                <?php self::render_gtm_section(); ?>
+                <?php self::render_injection_settings(); ?>
+            </div>
+            <?php submit_button('Save JavaScript'); ?>
+        </form>
+        <?php self::render_faq_section(); ?>
+        <?php
+    }
+
+    /**
+     * Render the UTM builder tab
+     */
+    private static function render_utm_tab() {
+        ?>
+        <div class="leadstream-utm-builder" style="max-width: 800px;">
+            <h2>UTM Builder</h2>
+            <p>Generate UTM-tagged URLs for tracking campaign performance across <strong>any marketing platform</strong> - social media, email, paid ads, content marketing, and more.</p>
+            
+            <form id="utm-builder-form" style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 4px;">
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="utm-url">Website URL *</label>
+                        </th>
+                        <td>
+                            <input type="url" 
+                                   id="utm-url" 
+                                   name="base_url" 
+                                   class="regular-text" 
+                                   placeholder="https://example.com/landing-page" 
+                                   required />
+                            <p class="description">The destination URL you want to track</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="utm-source">Campaign Source *</label>
+                        </th>
+                        <td>
+                            <input type="text" 
+                                   id="utm-source" 
+                                   name="utm_source" 
+                                   class="regular-text" 
+                                   placeholder="facebook, google, linkedin, newsletter, website" 
+                                   required />
+                            <p class="description">Where the traffic comes from (platform, website, or referrer)</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="utm-medium">Campaign Medium *</label>
+                        </th>
+                        <td>
+                            <input type="text" 
+                                   id="utm-medium" 
+                                   name="utm_medium" 
+                                   class="regular-text" 
+                                   placeholder="paid-social, email, ppc, display, organic" 
+                                   required />
+                            <p class="description">How users reached you (paid-social, email, ppc, display, organic, etc.)</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="utm-campaign">Campaign Name *</label>
+                        </th>
+                        <td>
+                            <input type="text" 
+                                   id="utm-campaign" 
+                                   name="utm_campaign" 
+                                   class="regular-text" 
+                                   placeholder="holiday-sale, webinar-series, brand-awareness" 
+                                   required />
+                            <p class="description">Your campaign name (keep consistent across channels)</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="utm-term">Campaign Term</label>
+                        </th>
+                        <td>
+                            <input type="text" 
+                                   id="utm-term" 
+                                   name="utm_term" 
+                                   class="regular-text" 
+                                   placeholder="business software, digital marketing, online tools" />
+                            <p class="description">Optional: Target keywords for paid search campaigns</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="utm-content">Campaign Content</label>
+                        </th>
+                        <td>
+                            <input type="text" 
+                                   id="utm-content" 
+                                   name="utm_content" 
+                                   class="regular-text" 
+                                   placeholder="video-ad, carousel-post, story-highlight, banner-top" />
+                            <p class="description">Optional: Differentiate ad variations, content types, or placements</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="utm-button">Button/CTA Tracking</label>
+                        </th>
+                        <td>
+                            <input type="text" 
+                                   id="utm-button" 
+                                   name="utm_button" 
+                                   class="regular-text" 
+                                   placeholder="learn-more, get-started, watch-demo, contact-sales" />
+                            <p class="description">Optional: Track specific call-to-action buttons or links</p>
+                        </td>
+                    </tr>
+                </table>
+                
+                <p class="submit">
+                    <button type="button" id="generate-utm" class="button-primary">Generate UTM URL</button>
+                    <button type="button" id="clear-utm" class="button">Clear Form</button>
+                </p>
+            </form>
+            
+            <div id="utm-result" style="display: none; margin-top: 20px;">
+                <h3>✅ Generated UTM URL</h3>
+                <div style="background: #f7f7f7; padding: 20px; border-radius: 6px; border: 1px solid #ddd;">
+                    
+                    <!-- Full URL Display -->
+                    <div style="margin-bottom: 15px;">
+                        <label for="utm-generated-url" style="font-weight: 600; margin-bottom: 5px; display: block;">
+                            📋 Complete UTM URL:
+                        </label>
+                        <textarea id="utm-generated-url" 
+                                  readonly 
+                                  style="width: 100%; height: 100px; padding: 10px; font-family: 'Courier New', monospace; 
+                                         background: #fff; border: 1px solid #ccd0d4; border-radius: 4px; 
+                                         font-size: 12px; line-height: 1.4; resize: vertical;"
+                                  placeholder="Generated UTM URL will appear here..."></textarea>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div style="margin-bottom: 15px;">
+                        <button type="button" id="copy-utm-url" class="button button-primary" style="margin-right: 10px;">
+                            📋 Copy URL
+                        </button>
+                        <button type="button" id="open-utm-url" class="button" style="margin-right: 10px;">
+                            🌐 Test URL
+                        </button>
+                        <span id="utm-copy-feedback" style="color: #46b450; font-weight: 600; display: none;">
+                            ✅ Copied to clipboard!
+                        </span>
+                    </div>
+                    
+                    <!-- UTM Parameters Breakdown -->
+                    <div id="utm-breakdown" style="background: #fff; padding: 15px; border-radius: 4px; border: 1px solid #e0e0e0;">
+                        <h4 style="margin-top: 0; margin-bottom: 10px; color: #333;">🔍 UTM Parameters Breakdown:</h4>
+                        <div id="utm-params-list" style="font-family: monospace; font-size: 13px; line-height: 1.6;">
+                            <!-- Parameters will be populated by JavaScript -->
+                        </div>
+                        <p style="margin-top: 15px; margin-bottom: 0; font-size: 12px; color: #666;">
+                            <strong>💡 Universal Usage Guide:</strong><br>
+                            • <strong>Social Platforms:</strong> Facebook, Instagram, LinkedIn, Twitter, TikTok, YouTube ads & posts<br>
+                            • <strong>Paid Advertising:</strong> Google Ads, Microsoft Ads, display networks, native advertising<br>
+                            • <strong>Email Marketing:</strong> Newsletters, automated sequences, promotional campaigns<br>
+                            • <strong>Content Marketing:</strong> Blog posts, guest articles, influencer partnerships<br>
+                            • <strong>Analytics:</strong> View results in Google Analytics, Adobe Analytics, or your preferred platform<br>
+                            • <strong>Best Practice:</strong> Keep campaign names consistent across all marketing channels
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <?php self::render_utm_history(); ?>
+        </div>
+        <?php
+    }
+
+    /**
+     * Render UTM history table
+     */
+    private static function render_utm_history() {
+        $history = get_transient('ls_utm_history') ?: [];
+        if (empty($history)) {
+            return;
+        }
+        ?>
+        <div style="margin-top: 40px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2 style="margin: 0;">📋 Recent UTM URLs</h2>
+                <button type="button" id="clear-utm-history" class="button" style="color: #d63638;">
+                    🗑️ Clear History
+                </button>
+            </div>
+            
+            <table class="widefat fixed striped" style="margin-top: 0;">
+                <thead>
+                    <tr>
+                        <th width="3%">#</th>
+                        <th width="30%">Campaign Details</th>
+                        <th>Generated URL</th>
+                        <th width="12%">When</th>
+                        <th width="15%">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($history as $i => $entry): 
+                        $num = $i + 1;
+                        $url = esc_url($entry['url']);
+                        $when = human_time_diff($entry['time'], current_time('timestamp')) . ' ago';
+                        $full_date = date_i18n('Y-m-d H:i:s', $entry['time']);
+                    ?>
+                    <tr>
+                        <td><?php echo $num; ?></td>
+                        <td>
+                            <strong><?php echo esc_html($entry['campaign']); ?></strong><br>
+                            <small style="color: #666;">
+                                <?php echo esc_html($entry['source']); ?> • <?php echo esc_html($entry['medium']); ?>
+                                <?php if (!empty($entry['content'])): ?>
+                                    • <?php echo esc_html($entry['content']); ?>
+                                <?php endif; ?>
+                            </small>
+                        </td>
+                        <td>
+                            <code style="word-break: break-all; font-size: 11px; line-height: 1.3;">
+                                <?php echo esc_html($url); ?>
+                            </code>
+                        </td>
+                        <td title="<?php echo esc_attr($full_date); ?>">
+                            <?php echo esc_html($when); ?>
+                        </td>
+                        <td>
+                            <button class="button button-small copy-history" 
+                                    data-url="<?php echo esc_attr($url); ?>" 
+                                    style="margin-right: 5px;">
+                                📋 Copy
+                            </button>
+                            <button class="button button-small test-history" 
+                                    data-url="<?php echo esc_attr($url); ?>">
+                                🌐 Test
+                            </button>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+            
+            <script>
+            jQuery(function($) {
+                // Copy history URL
+                $('.copy-history').on('click', function() {
+                    const $btn = $(this);
+                    const url = $btn.data('url');
+                    
+                    if (navigator.clipboard && window.isSecureContext) {
+                        navigator.clipboard.writeText(url).then(function() {
+                            $btn.text('✅ Copied!');
+                            setTimeout(() => $btn.text('📋 Copy'), 2000);
+                        });
+                    } else {
+                        // Fallback
+                        const textArea = document.createElement('textarea');
+                        textArea.value = url;
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textArea);
+                        $btn.text('✅ Copied!');
+                        setTimeout(() => $btn.text('📋 Copy'), 2000);
+                    }
+                });
+                
+                // Test history URL
+                $('.test-history').on('click', function() {
+                    const url = $(this).data('url');
+                    window.open(url, '_blank');
+                });
+                
+                // Clear history
+                $('#clear-utm-history').on('click', function() {
+                    if (!confirm('Are you sure you want to clear all UTM history? This cannot be undone.')) {
+                        return;
+                    }
+                    
+                    const $btn = $(this);
+                    $btn.prop('disabled', true).text('Clearing...');
+                    
+                    $.post(leadstream_utm_ajax.ajax_url, {
+                        action: 'clear_utm_history',
+                        nonce: leadstream_utm_ajax.nonce
+                    })
+                    .done(function(response) {
+                        if (response.success) {
+                            location.reload(); // Refresh to hide the table
+                        } else {
+                            alert('Error clearing history: ' + (response.data || 'Unknown error'));
+                        }
+                    })
+                    .fail(function() {
+                        alert('Error: Could not connect to server.');
+                    })
+                    .always(function() {
+                        $btn.prop('disabled', false).text('🗑️ Clear History');
+                    });
+                });
+            });
+            </script>
+        </div>
         <?php
     }
 }
