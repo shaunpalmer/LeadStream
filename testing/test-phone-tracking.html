@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeadStream Phone Tracking Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .test-section {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .phone-link {
+            display: inline-block;
+            color: #007cba;
+            text-decoration: none;
+            padding: 10px 15px;
+            border: 2px solid #007cba;
+            border-radius: 6px;
+            margin: 5px;
+            transition: all 0.3s ease;
+        }
+        .phone-link:hover {
+            background: #007cba;
+            color: white;
+        }
+        .ls-phone-tracked {
+            border-color: #00a32a !important;
+            background: #f0f8f0;
+        }
+        .ls-phone-clicked {
+            background: #dba617 !important;
+            color: white !important;
+            transform: scale(1.05);
+        }
+        .custom-phone-button {
+            background: #d63384;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        .status {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+    </style>
+</head>
+<body>
+    <h1>📞 LeadStream Phone Tracking Test Page</h1>
+    
+    <div class="status">
+        <strong>Test Status:</strong> This page tests the enhanced phone tracking system with various phone number formats and elements.
+    </div>
+
+    <div class="test-section">
+        <h2>🎯 Standard Tel: Links (Auto-Detected)</h2>
+        <p>These should be automatically tracked if the phone numbers are configured in LeadStream settings:</p>
+        
+        <div class="test-grid">
+            <a href="tel:+15551234567" class="phone-link">📱 +1 (555) 123-4567</a>
+            <a href="tel:5551234567" class="phone-link">📞 555-123-4567</a>
+            <a href="tel:555.123.4567" class="phone-link">☎️ 555.123.4567</a>
+            <a href="tel:15551234567" class="phone-link">📲 1-555-123-4567</a>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🎨 Custom Phone Elements (CSS Selectors)</h2>
+        <p>These require CSS selectors in the phone tracking settings:</p>
+        
+        <div class="test-grid">
+            <button class="custom-phone-button" data-phone="555-123-4567">
+                🚀 Call Now Button
+            </button>
+            
+            <div class="phone-widget" data-phone="+1-555-123-4567">
+                <strong>📧 Contact Widget</strong><br>
+                Click to call: (555) 123-4567
+            </div>
+            
+            <span class="phone-text" id="contact-phone">
+                📍 Office: 555.123.4567
+            </span>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🔧 Different Phone Formats</h2>
+        <p>Testing various phone number formats that should all normalize to digits:</p>
+        
+        <div class="test-grid">
+            <a href="tel:(555) 123-4567" class="phone-link">(555) 123-4567</a>
+            <a href="tel:555 123 4567" class="phone-link">555 123 4567</a>
+            <a href="tel:+1.555.123.4567" class="phone-link">+1.555.123.4567</a>
+            <a href="tel:1 (555) 123-4567" class="phone-link">1 (555) 123-4567</a>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>📊 Test Instructions</h2>
+        <ol>
+            <li><strong>Configure Phone Numbers:</strong> Add your test numbers in LeadStream → Phone Tracking</li>
+            <li><strong>Add CSS Selectors:</strong> Optionally add these selectors:
+                <ul>
+                    <li><code>.custom-phone-button</code></li>
+                    <li><code>.phone-widget</code></li>
+                    <li><code>#contact-phone</code></li>
+                </ul>
+            </li>
+            <li><strong>Test Clicks:</strong> Click the phone links/buttons above</li>
+            <li><strong>Check Analytics:</strong> View stats in LeadStream admin and Google Analytics</li>
+            <li><strong>Verify Tracking:</strong> Tracked elements should turn green, clicked elements flash yellow</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>🔍 Browser Console Test</h2>
+        <p>Open browser dev tools (F12) and run these commands:</p>
+        <pre><code>// Check if tracking is loaded
+console.log(window.LeadStreamPhoneRescan);
+
+// Re-scan for phone elements
+LeadStreamPhoneRescan();
+
+// Check tracked elements
+console.log(document.querySelectorAll('.ls-phone-tracked'));
+</code></pre>
+    </div>
+
+    <script>
+        // Simple test script to show tracking status
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                const trackedElements = document.querySelectorAll('.ls-phone-tracked');
+                const statusDiv = document.querySelector('.status');
+                
+                if (trackedElements.length > 0) {
+                    statusDiv.innerHTML = `<strong>✅ Tracking Active:</strong> ${trackedElements.length} phone elements are being tracked.`;
+                    statusDiv.style.background = '#d4edda';
+                    statusDiv.style.borderColor = '#c3e6cb';
+                    statusDiv.style.color = '#155724';
+                } else {
+                    statusDiv.innerHTML = `<strong>⚠️ No Tracking:</strong> No phone elements detected. Check your phone number configuration.`;
+                    statusDiv.style.background = '#fff3cd';
+                    statusDiv.style.borderColor = '#ffeaa7';
+                    statusDiv.style.color = '#856404';
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

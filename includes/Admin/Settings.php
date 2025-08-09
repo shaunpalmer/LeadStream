@@ -18,12 +18,16 @@ class Settings {
         add_action('admin_footer', [__CLASS__, 'custom_admin_footer']);
         add_filter('plugin_action_links_' . plugin_basename(dirname(dirname(__DIR__)) . '/leadstream-analytics-injector.php'), [__CLASS__, 'add_settings_link']);
         
+        // Dashboard widget for Pretty Links stats
+        add_action('wp_dashboard_setup', [__CLASS__, 'add_dashboard_widget']);
+        
         // Pretty Links form handlers (remove old admin_post handlers)
         // add_action('admin_post_add_pretty_link', [__CLASS__, 'handle_add_pretty_link']);
         // add_action('admin_post_edit_pretty_link', [__CLASS__, 'handle_edit_pretty_link']);
         
         // AJAX handlers
         add_action('wp_ajax_check_slug_availability', [__CLASS__, 'ajax_check_slug_availability']);
+    add_action('wp_ajax_ls_generate_short_slug', [__CLASS__, 'ajax_generate_short_slug']);
     }
     
     /**
@@ -37,6 +41,70 @@ class Settings {
             'leadstream-analytics-injector', 
             [__CLASS__, 'display_settings_page']
         );
+    }
+    
+    /**
+     * Sanitize and normalize phone numbers input with deduplication
+     */
+    public static function sanitize_phone_numbers($input) {
+        if (empty($input)) {
+            return array();
+        }
+        
+        
+        // Handle both string and array input
+        if (is_array($input)) {
+            $raw_numbers = $input;
+        } else {
+            // If it's a string, split by newlines
+            $raw_numbers = explode("\n", $input);
+        }
+        
+        $normalized_numbers = array();
+        
+        foreach ($raw_numbers as $raw_number) {
+            $raw_number = trim(sanitize_text_field($raw_number));
+            if (empty($raw_number)) {
+                continue;
+            }
+            
+            // Normalize the phone number (digits only)
+            $normalized = self::normalize_phone_number($raw_number);
+            
+            // Only add if it's not already in our array (deduplication)
+            if (!empty($normalized) && !in_array($normalized, $normalized_numbers)) {
+                $normalized_numbers[] = $normalized;
+            }
+        }
+        
+        return $normalized_numbers;
+    }
+    
+    /**
+     * Normalize phone number to consistent format (digits only)
+     */
+    private static function normalize_phone_number($phone) {
+        if (empty($phone)) {
+            return '';
+        }
+        
+        // Strip all non-digits
+        $digits_only = preg_replace('/\D/', '', $phone);
+        
+        // Handle common US formats
+        if (strlen($digits_only) === 10) {
+            // 10 digits: assume US number, add country code
+            return '1' . $digits_only;
+        } elseif (strlen($digits_only) === 11 && substr($digits_only, 0, 1) === '1') {
+            // 11 digits starting with 1: already has US country code
+            return $digits_only;
+        } elseif (strlen($digits_only) >= 10) {
+            // International number: keep as-is if reasonable length
+            return $digits_only;
+        }
+        
+        // If less than 10 digits, probably not a valid phone number
+        return '';
     }
     
     /**
@@ -60,6 +128,11 @@ class Settings {
         register_setting('lead-tracking-js-settings-group', 'leadstream_gtm_id', array(
             'sanitize_callback' => 'sanitize_text_field'
         ));
+        
+        // Phone tracking settings - handled via custom form processing
+        // register_setting('leadstream_phone_settings_group', 'leadstream_phone_numbers', array(
+        //     'sanitize_callback' => [__CLASS__, 'sanitize_phone_numbers']
+        // ));
         
         add_settings_section(
             'lead-tracking-js-settings-section',
@@ -147,6 +220,10 @@ class Settings {
                 <a href="<?php echo add_query_arg('tab', 'links', admin_url('admin.php?page=leadstream-analytics-injector')); ?>" 
                    class="nav-tab <?php echo $current_tab === 'links' ? 'nav-tab-active' : ''; ?>">
                     🎯 Pretty Links
+                </a>
+                <a href="<?php echo add_query_arg('tab', 'phone', admin_url('admin.php?page=leadstream-analytics-injector')); ?>" 
+                   class="nav-tab <?php echo $current_tab === 'phone' ? 'nav-tab-active' : ''; ?>">
+                    📞 Phone Tracking
                 </a>
                 <!-- Future analytics tab placeholder -->
                 <?php /* 
@@ -381,6 +458,9 @@ class Settings {
                             echo '</div>';
                             break;
                     }
+                    break;
+                case 'phone':
+                    self::render_phone_tab();
                     break;
                 /* Future analytics tab
                 case 'analytics':
@@ -1085,9 +1165,713 @@ document.addEventListener('wpformsSubmit', function (event) {
     }
 
     /**
+     * Get phone tracking summary for live counters
+     */
+    private static function get_phone_tracking_summary() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'ls_clicks';
+        
+        // Check if table exists and has required columns
+        $table_exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table)) === $table;
+        if (!$table_exists) {
+            return ['total' => 0, 'phone' => 0, 'custom' => 0, 'today' => 0];
+        }
+        
+        // Total clicks recorded for testing/demo purposes
+        $total = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table} WHERE link_type IN (%s, %s)",
+            'phone', 'test'
+        ));
+        
+        // Phone clicks (link_type = 'phone')
+        $phone = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table} WHERE link_type = %s",
+            'phone'
+        ));
+        
+        // Today's phone clicks
+        $today = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table} WHERE link_type = %s AND DATE(clicked_at) = %s",
+            'phone',
+            current_time('Y-m-d')
+        ));
+        
+        // Custom element clicks (approximate - phone clicks from custom selectors)
+        $custom = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table} WHERE link_type = %s AND element_class IS NOT NULL AND element_class != ''",
+            'phone'
+        ));
+        
+        return compact('total', 'phone', 'custom', 'today');
+    }
+
+    /**
+     * Render Phone Tracking tab
+     */
+    private static function render_phone_tab() {
+        // Handle form submission
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['leadstream_phone_submit'])) {
+            check_admin_referer('leadstream_phone_settings', 'leadstream_phone_nonce');
+            
+            // Count original vs normalized numbers for feedback
+            $original_input = $_POST['leadstream_phone_numbers'] ?? '';
+            $original_count = 0;
+            if (!empty($original_input)) {
+                $original_lines = explode("\n", $original_input);
+                $original_count = count(array_filter(array_map('trim', $original_lines)));
+            }
+            
+            // Sanitize and save phone numbers (with normalization and deduplication)
+            $phone_numbers = self::sanitize_phone_numbers($original_input);
+            update_option('leadstream_phone_numbers', $phone_numbers);
+            
+            // Sanitize and save CSS selectors
+            $css_selectors = sanitize_textarea_field($_POST['leadstream_phone_selectors'] ?? '');
+            update_option('leadstream_phone_selectors', $css_selectors);
+            
+            // Save enable/disable setting
+            $phone_enabled = isset($_POST['leadstream_phone_enabled']) ? 1 : 0;
+            update_option('leadstream_phone_enabled', $phone_enabled);
+            
+            // Show success message with normalization feedback
+            $normalized_count = count($phone_numbers);
+            $message = 'Phone tracking settings saved successfully!';
+            
+            if ($original_count > $normalized_count && $normalized_count > 0) {
+                $duplicates_removed = $original_count - $normalized_count;
+                $message .= " <strong>Optimization:</strong> {$duplicates_removed} duplicate/invalid numbers were automatically removed.";
+            }
+            
+            echo '<div class="notice notice-success is-dismissible"><p>' . $message . '</p></div>';
+        }
+        
+        // Get current settings
+        $phone_numbers = get_option('leadstream_phone_numbers', array());
+        $css_selectors = get_option('leadstream_phone_selectors', '');
+        $phone_enabled = get_option('leadstream_phone_enabled', 1);
+        
+        // Get phone click stats with proper wpdb->prepare() usage
+        global $wpdb;
+    $total_phone_clicks = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}ls_clicks WHERE link_type = %s",
+            'phone'
+    ));
+    $phone_clicks_today = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}ls_clicks WHERE link_type = %s AND DATE(clicked_at) = %s",
+            'phone',
+            current_time('Y-m-d')
+    ));
+    $phone_clicks_this_week = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}ls_clicks WHERE link_type = %s AND clicked_at >= %s",
+            'phone',
+            date('Y-m-d H:i:s', strtotime('-7 days'))
+        ));
+        // This month (from first day of current month)
+        $month_start = date('Y-m-01 00:00:00');
+        $phone_clicks_this_month = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}ls_clicks WHERE link_type = %s AND clicked_at >= %s",
+            'phone',
+            $month_start
+        ));
+        
+        // Sparkline data for phone clicks (last 14 days)
+        $phone_sparkline_data = [];
+        for ($i = 13; $i >= 0; $i--) {
+            $date = date('Y-m-d', strtotime("-{$i} days"));
+            $clicks = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->prefix}ls_clicks WHERE link_type = 'phone' AND DATE(clicked_at) = %s",
+                $date
+            ));
+            $phone_sparkline_data[] = intval($clicks);
+        }
+        
+        ?>
+        <div class="leadstream-phone-tracking" style="max-width: 900px;">
+            <h2>📞 Phone Click Tracking</h2>
+            <p>Track clicks on phone numbers across your website. Monitor which numbers get the most calls and analyze user engagement patterns.</p>
+            
+            <!-- Unified Stats (always visible) -->
+            
+            <!-- Current Phone Numbers Info -->
+            <?php if (!empty($phone_numbers)): ?>
+            <div style="background: #f0f8f0; border: 1px solid #c6e1c6; color: #155724; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                <h4 style="margin: 0 0 10px 0; color: #155724;">✅ Currently Tracking <?php echo count($phone_numbers); ?> Phone Number<?php echo count($phone_numbers) === 1 ? '' : 's'; ?></h4>
+                <div style="font-family: 'Courier New', monospace; background: #fff; padding: 10px; border-radius: 3px; border: 1px solid #ddd;">
+                    <?php foreach ($phone_numbers as $num): ?>
+                        <div style="padding: 2px 0;"><strong><?php echo esc_html($num); ?></strong> <span style="color: #666;">(normalized)</span></div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+            
+            <!-- Phone Tracking Stats (always visible, default 0s) -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                <div style="text-align: center; padding: 15px; background: #f0f6fc; border-radius: 6px; border-left: 4px solid #2271b1;">
+                    <div style="font-size: 24px; font-weight: 600; color: #1d2327; margin-bottom: 4px;">
+                        <?php echo number_format($total_phone_clicks); ?>
+                    </div>
+                    <div style="font-size: 12px; color: #50575e; text-transform: uppercase; letter-spacing: 0.5px;">
+                        Total Phone Clicks
+                    </div>
+                </div>
+                
+                <div style="text-align: center; padding: 15px; background: #f0f8f0; border-radius: 6px; border-left: 4px solid #00a32a;">
+                    <div style="font-size: 24px; font-weight: 600; color: #1d2327; margin-bottom: 4px;">
+                        <?php echo number_format($phone_clicks_this_week); ?>
+                    </div>
+                    <div style="font-size: 12px; color: #50575e; text-transform: uppercase; letter-spacing: 0.5px;">
+                        This Week
+                    </div>
+                </div>
+                
+                <div style="text-align: center; padding: 15px; background: #fff8e1; border-radius: 6px; border-left: 4px solid #dba617;">
+                    <div style="font-size: 24px; font-weight: 600; color: #1d2327; margin-bottom: 4px;">
+                        <?php echo number_format($phone_clicks_today); ?>
+                    </div>
+                    <div style="font-size: 12px; color: #50575e; text-transform: uppercase; letter-spacing: 0.5px;">
+                        Today
+                    </div>
+                </div>
+                
+                <div style="text-align: center; padding: 15px; background: #f3e8ff; border-radius: 6px; border-left: 4px solid #9333ea;">
+                    <div style="font-size: 24px; font-weight: 600; color: #1d2327; margin-bottom: 4px;">
+                        <?php echo number_format($phone_clicks_this_month); ?>
+                    </div>
+                    <div style="font-size: 12px; color: #50575e; text-transform: uppercase; letter-spacing: 0.5px;">
+                        This Month
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Phone Activity (collapsible) -->
+            <details open style="margin-bottom: 30px;">
+                <summary style="cursor: pointer; list-style: none;">
+                    <div style="display:flex; align-items:center; gap:8px; background:#fff; border:1px solid #dcdcde; border-radius:6px; padding:12px 15px;">
+                        <span style="font-size:14px; color:#1d2327;">📊 Phone Activity Trend (14 Days)</span>
+                        <?php 
+                        $total_p = array_sum($phone_sparkline_data);
+                        if ($total_p > 0) {
+                            $first_week_p = array_sum(array_slice($phone_sparkline_data, 0, 7));
+                            $second_week_p = array_sum(array_slice($phone_sparkline_data, 7, 7));
+                            if ($second_week_p > $first_week_p) {
+                                echo '<span style="color:#00a32a; font-size:12px;">📈 Trending Up</span>';
+                            } elseif ($second_week_p < $first_week_p) {
+                                echo '<span style="color:#d63638; font-size:12px;">📉 Trending Down</span>';
+                            } else {
+                                echo '<span style="color:#646970; font-size:12px;">➡️ Steady</span>';
+                            }
+                        } else {
+                            echo '<span style="color:#646970; font-size:12px;">No recent data</span>';
+                        }
+                        ?>
+                    </div>
+                </summary>
+                <div style="padding-top:10px;">
+                    <?php echo self::render_widget_sparkline($phone_sparkline_data); ?>
+                </div>
+            </details>
+            
+            <form method="post" style="background: #fff; padding: 25px; border: 1px solid #ccd0d4; border-radius: 6px;">
+                <?php wp_nonce_field('leadstream_phone_settings', 'leadstream_phone_nonce'); ?>
+                
+                <!-- Enable/Disable Toggle -->
+                <div style="margin-bottom: 25px; padding: 15px; background: #f0f6fc; border-left: 4px solid #2271b1; border-radius: 4px;">
+                    <label style="display: flex; align-items: center; gap: 10px; font-weight: 600;">
+                        <input type="checkbox" name="leadstream_phone_enabled" value="1" <?php checked($phone_enabled, 1); ?> />
+                        Enable Phone Click Tracking
+                    </label>
+                    <p style="margin: 8px 0 0 0; color: #50575e; font-size: 13px;">
+                        When enabled, all clicks on phone numbers will be tracked and sent to your analytics platforms.
+                    </p>
+                </div>
+                
+                <table class="form-table" role="presentation">
+                    <tbody>
+                        <tr>
+                            <th scope="row">
+                                <label for="leadstream_phone_numbers">Phone Numbers to Track</label>
+                            </th>
+                            <td>
+                                <textarea id="leadstream_phone_numbers" 
+                                          name="leadstream_phone_numbers" 
+                                          rows="4" 
+                                          class="large-text" 
+                                          placeholder="(555) 123-4567&#10;+1-555-123-4568&#10;555.123.4569"><?php echo esc_textarea(implode("\n", $phone_numbers)); ?></textarea>
+                                <p class="description">
+                                    <strong>Enter your main phone numbers, one per line.</strong><br>
+                                    Any format works: (555) 123-4567, +1-555-123-4567, 555.123.4567, etc.<br>
+                                    <em>Numbers are automatically normalized and deduplicated when saved.</em><br>
+                                    These numbers will be automatically detected in <code>tel:</code> links across your site.
+                                </p>
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <th scope="row">
+                                <label for="leadstream_phone_selectors">Custom CSS Selectors <em>(Optional)</em></label>
+                            </th>
+                            <td>
+                                <textarea id="leadstream_phone_selectors" 
+                                          name="leadstream_phone_selectors" 
+                                          rows="4" 
+                                          class="large-text" 
+                                          placeholder=".phone-button&#10;#call-now-btn&#10;.contact-phone a&#10;[data-phone]"><?php echo esc_textarea($css_selectors); ?></textarea>
+                                <p class="description">
+                                    <strong>Advanced:</strong> Track clicks on custom phone elements (one CSS selector per line).<br>
+                                    Examples: <code>.phone-button</code>, <code>#call-now-btn</code>, <code>.contact-phone a</code><br>
+                                    Useful for tracking custom phone buttons, click-to-call widgets, or styled phone elements.
+                                </p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #dcdcde;">
+                    <button type="submit" name="leadstream_phone_submit" class="button button-primary button-large">
+                        💾 Save Phone Tracking Settings
+                    </button>
+                </div>
+            </form>
+            
+            <!-- How It Works Section -->
+            <div style="margin-top: 30px; background: #f9f9f9; padding: 20px; border-radius: 6px; border-left: 4px solid #72aee6;">
+                <h3 style="margin-top: 0; color: #1d2327;">🔧 How Phone Tracking Works</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                    <div>
+                        <h4 style="color: #2271b1; margin-bottom: 8px;">📱 Automatic Detection</h4>
+                        <ul style="margin: 0; color: #50575e; font-size: 14px; line-height: 1.5;">
+                            <li>Scans all <code>&lt;a href="tel:..."&gt;</code> links</li>
+                            <li>Matches against your configured phone numbers</li>
+                            <li>Works with any phone number format</li>
+                            <li>No code changes required</li>
+                        </ul>
+                    </div>
+                    
+                    <div>
+                        <h4 style="color: #2271b1; margin-bottom: 8px;">📊 Analytics Integration</h4>
+                        <ul style="margin: 0; color: #50575e; font-size: 14px; line-height: 1.5;">
+                            <li>Sends events to Google Analytics (GA4)</li>
+                            <li>Stores click data in WordPress database</li>
+                            <li>Shows stats in your LeadStream dashboard</li>
+                            <li>Tracks timestamps and user context</li>
+                        </ul>
+                    </div>
+                    
+                    <div>
+                        <h4 style="color: #2271b1; margin-bottom: 8px;">🎯 Custom Elements</h4>
+                        <ul style="margin: 0; color: #50575e; font-size: 14px; line-height: 1.5;">
+                            <li>Track custom phone buttons and widgets</li>
+                            <li>Use CSS selectors for precise targeting</li>
+                            <li>Perfect for styled call-to-action buttons</li>
+                            <li>Works with page builders and themes</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Quick display controls & jump links -->
+            <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin: 10px 0 0 0;">
+                <nav style="display:flex; gap:8px;">
+                    <a href="#ls-recent" class="button">Recent</a>
+                    <a href="#ls-performance" class="button">Performance</a>
+                    <a href="#ls-all-calls" class="button button-primary">All Calls</a>
+                </nav>
+                <form method="get" style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+                    <input type="hidden" name="page" value="leadstream-analytics-injector" />
+                    <input type="hidden" name="tab" value="phone" />
+                    <label style="font-size:12px; color:#646970;">Per page
+                        <select name="pp" onchange="this.form.submit()">
+                            <?php $__pp_cur = isset($_GET['pp']) ? intval($_GET['pp']) : 25; ?>
+                            <option value="10" <?php selected($__pp_cur,10); ?>>10</option>
+                            <option value="25" <?php selected($__pp_cur,25); ?>>25</option>
+                            <option value="50" <?php selected($__pp_cur,50); ?>>50</option>
+                            <option value="100" <?php selected($__pp_cur,100); ?>>100</option>
+                        </select>
+                    </label>
+                </form>
+            </div>
+
+            <!-- Phone Click History -->
+            <?php
+            $recent_phone_clicks = $wpdb->get_results($wpdb->prepare(
+                "SELECT 
+                    link_key as phone_number,
+                    clicked_at,
+                    click_date,
+                    click_time,
+                    ip_address,
+                    referrer,
+                    page_url,
+                    page_title,
+                    element_type,
+                    element_class,
+                    element_id,
+                    user_agent
+                 FROM {$wpdb->prefix}ls_clicks 
+                 WHERE link_type = %s 
+                 ORDER BY clicked_at DESC 
+                 LIMIT %d",
+                'phone',
+                50
+            ));
+            
+            if (!empty($recent_phone_clicks)): ?>
+            <div id="ls-recent" style="margin-top: 30px;">
+                <h3>📞 Recent Phone Clicks</h3>
+                <table class="widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th width="12%">Date</th>
+                            <th width="10%">Time</th>
+                            <th width="16%">Phone</th>
+                            <th>Page</th>
+                            <th width="14%">Source</th>
+                            <th width="12%">IP</th>
+                            <th width="12%">Referrer</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($recent_phone_clicks as $click): ?>
+                        <?php 
+                            // Prefer split date/time if present, else derive from clicked_at
+                            $when_ts = strtotime($click->clicked_at);
+                            $date_str = !empty($click->click_date) ? esc_html(date_i18n('M j, Y', strtotime($click->click_date))) : esc_html(date_i18n('M j, Y', $when_ts));
+                            $time_str = !empty($click->click_time) ? esc_html(date_i18n('g:i A', strtotime($click->click_time))) : esc_html(date_i18n('g:i A', $when_ts));
+                            $source_bits = [];
+                            if (!empty($click->element_type)) { $source_bits[] = $click->element_type; }
+                            if (!empty($click->element_id)) { $source_bits[] = '#' . $click->element_id; }
+                            if (!empty($click->element_class)) { $source_bits[] = '.' . preg_replace('/\s+/', '.', $click->element_class); }
+                            $source = !empty($source_bits) ? implode(' ', $source_bits) : 'unknown';
+                            $ref_host = '';
+                            if (!empty($click->referrer)) { $p = wp_parse_url($click->referrer); $ref_host = $p['host'] ?? $click->referrer; }
+                        ?>
+                        <tr>
+                            <td><?php echo $date_str; ?></td>
+                            <td><?php echo $time_str; ?></td>
+                            <td><strong><?php echo esc_html($click->phone_number); ?></strong></td>
+                            <td>
+                                <?php if (!empty($click->page_url)): ?>
+                                    <a href="<?php echo esc_url($click->page_url); ?>" target="_blank" title="<?php echo esc_attr($click->page_title ?: $click->page_url); ?>">
+                                        <?php echo esc_html($click->page_title ?: $click->page_url); ?>
+                                    </a>
+                                <?php else: ?>
+                                    <span style="color:#646970;">(no page)</span>
+                                <?php endif; ?>
+                                <br><small style="color:#787c82;"><?php echo esc_html(human_time_diff($when_ts, current_time('timestamp')) . ' ago'); ?></small>
+                            </td>
+                            <td><code><?php echo esc_html($source); ?></code></td>
+                            <td><code><?php echo esc_html($click->ip_address ?: ''); ?></code></td>
+                            <td><?php echo esc_html($ref_host ?: ''); ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endif; ?>
+            
+            <!-- Phone Number Analytics Table -->
+            <?php if ($total_phone_clicks > 0): 
+                // Get phone number stats grouped by number
+                $phone_analytics = $wpdb->get_results($wpdb->prepare(
+                    "SELECT 
+                        link_key as phone_number,
+                        COUNT(*) as total_calls,
+                        COUNT(CASE WHEN DATE(clicked_at) = %s THEN 1 END) as today_calls,
+                        MAX(clicked_at) as last_click
+                     FROM {$wpdb->prefix}ls_clicks 
+                     WHERE link_type = %s 
+                     GROUP BY link_key 
+                     ORDER BY total_calls DESC",
+                    current_time('Y-m-d'),
+                    'phone'
+                ));
+            ?>
+            <div id="ls-performance" style="margin-top: 30px;">
+                <h3>📊 Phone Number Performance</h3>
+                <table class="widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th width="25%">Phone Number</th>
+                            <th width="15%">Total Calls</th>
+                            <th width="15%">Today's Calls</th>
+                            <th width="25%">Last Click</th>
+                            <th width="20%">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($phone_analytics as $phone_stat): ?>
+                        <tr>
+                            <td><strong><?php echo esc_html($phone_stat->phone_number); ?></strong></td>
+                            <td>
+                                <span style="background: #0073aa; color: white; padding: 3px 8px; border-radius: 3px; font-weight: 600;">
+                                    <?php echo number_format($phone_stat->total_calls); ?>
+                                </span>
+                            </td>
+                            <td>
+                                <?php if ($phone_stat->today_calls > 0): ?>
+                                <span style="background: #00a32a; color: white; padding: 3px 8px; border-radius: 3px; font-weight: 600;">
+                                    <?php echo number_format($phone_stat->today_calls); ?>
+                                </span>
+                                <?php else: ?>
+                                <span style="color: #787c82;">0</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php if ($phone_stat->last_click): ?>
+                                    <?php echo esc_html(date_i18n('M j, Y g:i A', strtotime($phone_stat->last_click))); ?>
+                                    <br><small style="color: #787c82;">
+                                        <?php echo esc_html(human_time_diff(strtotime($phone_stat->last_click), current_time('timestamp')) . ' ago'); ?>
+                                    </small>
+                                <?php else: ?>
+                                    <span style="color: #787c82;">Never</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <a href="tel:<?php echo esc_attr($phone_stat->phone_number); ?>" 
+                                   class="button button-small" 
+                                   style="text-decoration: none; margin-right: 5px;">
+                                    📞 Test Call
+                                </a>
+                                <button type="button" 
+                                        class="button button-small" 
+                                        onclick="prompt('Google Analytics Phone Event:', 'gtag(\'event\', \'phone_click\', {\'phone_number\': \'<?php echo esc_js($phone_stat->phone_number); ?>\'})')">
+                                    📊 GA4 Event
+                                </button>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endif; ?>
+
+            <!-- All Phone Calls (Filters + CSV) -->
+            <?php
+            // Only render if table exists
+            $table = $wpdb->prefix . 'ls_clicks';
+            $table_exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table)) === $table;
+            if ($table_exists):
+                // Gather filters (GET so it doesn't conflict with settings POST)
+                $from_date = isset($_GET['from']) ? sanitize_text_field($_GET['from']) : '';
+                $to_date = isset($_GET['to']) ? sanitize_text_field($_GET['to']) : '';
+                $phone_filter = isset($_GET['phone']) ? sanitize_text_field($_GET['phone']) : '';
+                $page_q = isset($_GET['q']) ? sanitize_text_field($_GET['q']) : '';
+                $elem_q = isset($_GET['elem']) ? sanitize_text_field($_GET['elem']) : '';
+                $per_page = isset($_GET['pp']) ? max(10, min(200, intval($_GET['pp']))) : 25;
+                $paged = isset($_GET['p']) ? max(1, intval($_GET['p'])) : 1;
+                $do_export = isset($_GET['export']) && $_GET['export'] === 'csv';
+
+                // Build WHERE conditions safely
+                $where = ["link_type = %s"]; $params = ['phone'];
+                if ($phone_filter !== '') { $where[] = "link_key = %s"; $params[] = $phone_filter; }
+                if ($from_date !== '') { $where[] = "clicked_at >= %s"; $params[] = $from_date . ' 00:00:00'; }
+                if ($to_date !== '') { $where[] = "clicked_at <= %s"; $params[] = $to_date . ' 23:59:59'; }
+                if ($page_q !== '') {
+                    $like = '%' . $wpdb->esc_like($page_q) . '%';
+                    $where[] = "(page_title LIKE %s OR page_url LIKE %s)"; $params[] = $like; $params[] = $like;
+                }
+                if ($elem_q !== '') {
+                    $elike = '%' . $wpdb->esc_like($elem_q) . '%';
+                    $where[] = "(element_type LIKE %s OR element_id LIKE %s OR element_class LIKE %s)";
+                    $params[] = $elike; $params[] = $elike; $params[] = $elike;
+                }
+                $where_sql = implode(' AND ', $where);
+
+                // CSV Export
+                if ($do_export && current_user_can('manage_options')) {
+                    $csv_sql = "SELECT click_date, click_time, link_key as phone, page_title, page_url, element_type, element_id, element_class, ip_address, referrer, clicked_at FROM {$table} WHERE {$where_sql} ORDER BY clicked_at DESC LIMIT %d";
+                    $csv_params = array_merge($params, [5000]);
+                    $rows = $wpdb->get_results($wpdb->prepare($csv_sql, $csv_params), ARRAY_A);
+                    header('Content-Type: text/csv; charset=utf-8');
+                    header('Content-Disposition: attachment; filename=leadstream-phone-calls.csv');
+                    $out = fopen('php://output', 'w');
+                    fputcsv($out, array_keys(reset($rows) ?: [
+                        'click_date','click_time','phone','page_title','page_url','element_type','element_id','element_class','ip_address','referrer','clicked_at'
+                    ]));
+                    foreach ($rows as $r) { fputcsv($out, $r); }
+                    fclose($out);
+                    exit;
+                }
+
+                // Total count for pagination
+                $count_sql = "SELECT COUNT(*) FROM {$table} WHERE {$where_sql}";
+                $total_count = (int) $wpdb->get_var($wpdb->prepare($count_sql, $params));
+                $offset = ($paged - 1) * $per_page;
+
+                // Fetch page results
+                $data_sql = "SELECT 
+                        link_key as phone_number,
+                        clicked_at, click_date, click_time,
+                        page_title, page_url,
+                        element_type, element_id, element_class,
+                        ip_address, referrer
+                    FROM {$table}
+                    WHERE {$where_sql}
+                    ORDER BY clicked_at DESC
+                    LIMIT %d OFFSET %d";
+                $data_params = array_merge($params, [$per_page, $offset]);
+                $all_calls = $wpdb->get_results($wpdb->prepare($data_sql, $data_params));
+
+                // Distinct numbers for dropdown
+                $numbers = $wpdb->get_col("SELECT DISTINCT link_key FROM {$table} WHERE link_type = 'phone' ORDER BY link_key ASC");
+            ?>
+            <div id="ls-all-calls" style="margin-top: 40px;">
+                <h3>📒 All Phone Calls</h3>
+                <form method="get" style="margin-bottom: 12px; display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:10px; align-items:end;">
+                    <input type="hidden" name="page" value="leadstream-analytics-injector" />
+                    <input type="hidden" name="tab" value="phone" />
+                    <div>
+                        <label for="ls_from" style="display:block; font-size:12px; color:#646970;">From</label>
+                        <input id="ls_from" type="date" name="from" value="<?php echo esc_attr($from_date); ?>" class="regular-text" />
+                    </div>
+                    <div>
+                        <label for="ls_to" style="display:block; font-size:12px; color:#646970;">To</label>
+                        <input id="ls_to" type="date" name="to" value="<?php echo esc_attr($to_date); ?>" class="regular-text" />
+                    </div>
+                    <div>
+                        <label for="ls_phone" style="display:block; font-size:12px; color:#646970;">Phone</label>
+                        <select id="ls_phone" name="phone" class="regular-text">
+                            <option value="">All</option>
+                            <?php foreach ($numbers as $num): ?>
+                                <option value="<?php echo esc_attr($num); ?>" <?php selected($phone_filter, $num); ?>><?php echo esc_html($num); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="ls_q" style="display:block; font-size:12px; color:#646970;">Page contains</label>
+                        <input id="ls_q" type="text" name="q" value="<?php echo esc_attr($page_q); ?>" placeholder="/contact, Title..." class="regular-text" />
+                    </div>
+                    <div>
+                        <label for="ls_elem" style="display:block; font-size:12px; color:#646970;">Element contains</label>
+                        <input id="ls_elem" type="text" name="elem" value="<?php echo esc_attr($elem_q); ?>" placeholder="a, #call-now, .btn" class="regular-text" />
+                    </div>
+                    <div>
+                        <label for="ls_pp" style="display:block; font-size:12px; color:#646970;">Per page</label>
+                        <input id="ls_pp" type="number" name="pp" value="<?php echo esc_attr($per_page); ?>" min="10" max="200" />
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="button button-primary" type="submit">Filter</button>
+                        <a class="button" href="<?php echo esc_url(add_query_arg(['page'=>'leadstream-analytics-injector','tab'=>'phone'], admin_url('admin.php'))); ?>">Reset</a>
+                        <a class="button button-secondary" href="<?php echo esc_url(add_query_arg(array_merge($_GET, ['export'=>'csv']))); ?>">Export CSV</a>
+                    </div>
+                </form>
+
+                <div style="margin-bottom:8px; color:#646970; font-size:12px;">Showing <?php echo number_format(min($per_page, max(0, $total_count - $offset))); ?> of <?php echo number_format($total_count); ?> result<?php echo $total_count==1?'':'s'; ?>.</div>
+
+                <table class="widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th width="12%">Date</th>
+                            <th width="10%">Time</th>
+                            <th width="16%">Phone</th>
+                            <th>Page</th>
+                            <th width="14%">Source</th>
+                            <th width="12%">IP</th>
+                            <th width="12%">Referrer</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($all_calls)): ?>
+                            <tr><td colspan="7" style="text-align:center; color:#646970;">No calls found for the selected filters.</td></tr>
+                        <?php else: foreach ($all_calls as $row): ?>
+                        <?php 
+                            $ts = strtotime($row->clicked_at);
+                            $date_str = !empty($row->click_date) ? esc_html(date_i18n('M j, Y', strtotime($row->click_date))) : esc_html(date_i18n('M j, Y', $ts));
+                            $time_str = !empty($row->click_time) ? esc_html(date_i18n('g:i A', strtotime($row->click_time))) : esc_html(date_i18n('g:i A', $ts));
+                            $bits = [];
+                            if (!empty($row->element_type)) $bits[] = $row->element_type;
+                            if (!empty($row->element_id)) $bits[] = '#' . $row->element_id;
+                            if (!empty($row->element_class)) $bits[] = '.' . preg_replace('/\s+/', '.', $row->element_class);
+                            $src = !empty($bits) ? implode(' ', $bits) : 'unknown';
+                            $ref_host = '';
+                            if (!empty($row->referrer)) { $p = wp_parse_url($row->referrer); $ref_host = $p['host'] ?? $row->referrer; }
+                        ?>
+                        <tr>
+                            <td><?php echo $date_str; ?></td>
+                            <td><?php echo $time_str; ?></td>
+                            <td><strong><?php echo esc_html($row->phone_number); ?></strong></td>
+                            <td>
+                                <?php if (!empty($row->page_url)): ?>
+                                    <a href="<?php echo esc_url($row->page_url); ?>" target="_blank" title="<?php echo esc_attr($row->page_title ?: $row->page_url); ?>">
+                                        <?php echo esc_html($row->page_title ?: $row->page_url); ?>
+                                    </a>
+                                <?php else: ?>
+                                    <span style="color:#646970;">(no page)</span>
+                                <?php endif; ?>
+                            </td>
+                            <td><code><?php echo esc_html($src); ?></code></td>
+                            <td><code><?php echo esc_html($row->ip_address ?: ''); ?></code></td>
+                            <td><?php echo esc_html($ref_host ?: ''); ?></td>
+                        </tr>
+                        <?php endforeach; endif; ?>
+                    </tbody>
+                </table>
+
+                <?php 
+                // Pagination
+                $total_pages = max(1, ceil($total_count / $per_page));
+                if ($total_pages > 1):
+                    echo '<div class="tablenav"><div class="tablenav-pages">';
+                    for ($i=1; $i<=$total_pages; $i++) {
+                        $url = add_query_arg(array_merge($_GET, ['p'=>$i]));
+                        $style = $i==$paged ? 'font-weight:600;' : '';
+                        echo '<a class="page-numbers" style="margin-right:6px; ' . esc_attr($style) . '" href="' . esc_url($url) . '">' . intval($i) . '</a>';
+                    }
+                    echo '</div></div>';
+                endif; 
+                ?>
+            </div>
+            <?php endif; // table_exists ?>
+        </div>
+        
+        <!-- FAQ & Tips -->
+        <div style="margin-top: 24px; background:#ffffff; border:1px solid #dcdcde; border-radius:6px;">
+            <div style="padding:14px 16px; border-bottom:1px solid #f0f0f1;">
+                <h3 style="margin:0; font-size:16px;">❓ Phone Tracking FAQ & Tips</h3>
+            </div>
+            <div style="padding:14px 16px;">
+                <details open style="margin-bottom:10px;">
+                    <summary style="font-weight:600; cursor:pointer;">How do I add phone numbers to track?</summary>
+                    <div style="margin-top:8px; color:#50575e;">
+                        Enter one phone number per line in the “Phone Numbers to Track” box. Any format is fine (e.g. (555) 123-4567, +1-555-123-4567). We normalize and deduplicate automatically when you save.
+                    </div>
+                </details>
+                <details style="margin-bottom:10px;">
+                    <summary style="font-weight:600; cursor:pointer;">What if a number isn’t being tracked?</summary>
+                    <div style="margin-top:8px; color:#50575e;">
+                        Make sure the number appears exactly on the page (or in a tel: link). We match by digits after normalization, so “(555) 123-4567” and “5551234567” are equivalent.
+                        Also confirm the feature is enabled and clear any caching that might block updated scripts.
+                    </div>
+                </details>
+                <details style="margin-bottom:10px;">
+                    <summary style="font-weight:600; cursor:pointer;">How do custom selectors work?</summary>
+                    <div style="margin-top:8px; color:#50575e;">
+                        If your site uses stylized buttons or widgets instead of tel: links, add CSS selectors (one per line). We’ll bind click tracking to those elements as well.
+                    </div>
+                </details>
+                <details style="margin-bottom:10px;">
+                    <summary style="font-weight:600; cursor:pointer;">Why do I see no data?</summary>
+                    <div style="margin-top:8px; color:#50575e;">
+                        New installs start at zero. Use your site to click the phone links, or for local demos go to the plugin’s Test Data injector to generate sample calls. The stat cards always render and will display zeros until clicks occur.
+                    </div>
+                </details>
+                <details>
+                    <summary style="font-weight:600; cursor:pointer;">How do I use the filters and export?</summary>
+                    <div style="margin-top:8px; color:#50575e;">
+                        Use From/To for date ranges, select a specific phone number, or search by page title/URL or element (like a, #call-now, .btn). Adjust Per Page to control list size. Click Export CSV to download the current view.
+                    </div>
+                </details>
+            </div>
+        </div>
+        <?php
+    }
+
+    /**
      * Render Pretty Links tab
      */
     private static function render_links_tab() {
+        // Buffer output so CSV exports can clear and send headers safely.
+        if (!headers_sent()) { ob_start(); }
         ?>
         <div class="leadstream-pretty-links">
             <h2>🎯 Pretty Links Dashboard</h2>
@@ -1132,6 +1916,292 @@ document.addEventListener('wpformsSubmit', function (event) {
                     <li><strong>Analytics Ready:</strong> Detailed click tracking for campaign optimization</li>
                 </ul>
             </div>
+
+            <?php
+            // All Link Clicks reporting (filters + CSV)
+            global $wpdb;
+            $table_c = $wpdb->prefix . 'ls_clicks';
+            $table_l = $wpdb->prefix . 'ls_links';
+            $table_exists_c = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_c)) === $table_c;
+            $table_exists_l = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_l)) === $table_l;
+            if ($table_exists_c && $table_exists_l):
+                // Filters (GET)
+                $from = isset($_GET['l_from']) ? sanitize_text_field($_GET['l_from']) : '';
+                // Links Directory (searchable + filterable)
+                $ld_from = isset($_GET['ld_from']) ? sanitize_text_field($_GET['ld_from']) : '';
+                $ld_to   = isset($_GET['ld_to'])   ? sanitize_text_field($_GET['ld_to'])   : '';
+                $ld_rt   = isset($_GET['ld_rt'])   ? sanitize_text_field($_GET['ld_rt'])   : '';
+                $ld_q    = isset($_GET['ld_q'])    ? sanitize_text_field($_GET['ld_q'])    : '';
+                $ld_pp   = isset($_GET['ld_pp'])   ? max(10, min(200, intval($_GET['ld_pp']))) : 25;
+                $ld_p    = isset($_GET['ld_p'])    ? max(1, intval($_GET['ld_p'])) : 1;
+                $ld_export = isset($_GET['ld_export']) && $_GET['ld_export'] === 'csv';
+
+                $ld_where = ['1=1']; $ld_params = [];
+                if ($ld_from) { $ld_where[] = 'l.created_at >= %s'; $ld_params[] = $ld_from . ' 00:00:00'; }
+                if ($ld_to)   { $ld_where[] = 'l.created_at <= %s'; $ld_params[] = $ld_to   . ' 23:59:59'; }
+                if (in_array($ld_rt, ['301','302','307','308'], true)) { $ld_where[] = 'l.redirect_type = %s'; $ld_params[] = $ld_rt; }
+                if ($ld_q) {
+                    $like = '%' . $wpdb->esc_like($ld_q) . '%';
+                    $ld_where[] = '(l.slug LIKE %s OR l.target_url LIKE %s)';
+                    $ld_params[] = $like; $ld_params[] = $like;
+                }
+                $ld_where_sql = implode(' AND ', $ld_where);
+
+                if ($ld_export && current_user_can('manage_options')) {
+                    // Ensure no prior output breaks CSV headers.
+                    if (function_exists('ob_get_level')) { while (ob_get_level()) { ob_end_clean(); } }
+                    $csv_sql = "SELECT l.slug, l.target_url, l.redirect_type, l.created_at,
+                                    (SELECT COUNT(*) FROM {$table_c} c2 WHERE c2.link_id = l.id AND c2.link_type='link') as total_clicks,
+                                    (SELECT MAX(clicked_at) FROM {$table_c} c3 WHERE c3.link_id = l.id AND c3.link_type='link') as last_click
+                                 FROM {$table_l} l
+                                 WHERE {$ld_where_sql}
+                                 ORDER BY l.created_at DESC
+                                 LIMIT %d";
+                    $rows = $wpdb->get_results($wpdb->prepare($csv_sql, array_merge($ld_params, [10000])), ARRAY_A);
+                    header('Content-Type: text/csv; charset=utf-8');
+                    header('Content-Disposition: attachment; filename=leadstream-links-directory.csv');
+                    $out = fopen('php://output', 'w');
+                    fputcsv($out, array_keys(reset($rows) ?: ['slug','target_url','redirect_type','created_at','total_clicks','last_click']));
+                    foreach ($rows as $r) { fputcsv($out, $r); }
+                    fclose($out); exit;
+                }
+
+                $ld_count_sql = "SELECT COUNT(*) FROM {$table_l} l WHERE {$ld_where_sql}";
+                $ld_total = (int) $wpdb->get_var($wpdb->prepare($ld_count_sql, $ld_params));
+                $ld_offset = ($ld_p - 1) * $ld_pp;
+
+                $ld_data_sql = "SELECT l.id, l.slug, l.target_url, l.redirect_type, l.created_at,
+                                    (SELECT COUNT(*) FROM {$table_c} c2 WHERE c2.link_id = l.id AND c2.link_type='link') as total_clicks,
+                                    (SELECT MAX(clicked_at) FROM {$table_c} c3 WHERE c3.link_id = l.id AND c3.link_type='link') as last_click
+                                 FROM {$table_l} l
+                                 WHERE {$ld_where_sql}
+                                 ORDER BY l.created_at DESC
+                                 LIMIT %d OFFSET %d";
+                $ld_rows = $wpdb->get_results($wpdb->prepare($ld_data_sql, array_merge($ld_params, [$ld_pp, $ld_offset])));
+                $ld_total_pages = max(1, ceil($ld_total / $ld_pp));
+
+            ?>
+            <div id="ls-links-dir" style="margin-top: 20px;">
+                <h3>📚 Links Directory</h3>
+                <form method="get" style="margin-bottom: 12px; display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:10px; align-items:end;">
+                    <input type="hidden" name="page" value="leadstream-analytics-injector" />
+                    <input type="hidden" name="tab" value="links" />
+                    <div>
+                        <label style="display:block; font-size:12px; color:#646970;">Created from</label>
+                        <input type="date" name="ld_from" value="<?php echo esc_attr($ld_from); ?>" />
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:12px; color:#646970;">Created to</label>
+                        <input type="date" name="ld_to" value="<?php echo esc_attr($ld_to); ?>" />
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:12px; color:#646970;">Redirect type</label>
+                        <select name="ld_rt">
+                            <?php $rts = ['', '301','302','307','308']; $labels = ['All','301','302','307','308'];
+                                  foreach ($rts as $i => $rt): $val = $rt; $text = $labels[$i]; ?>
+                                <option value="<?php echo esc_attr($val); ?>" <?php selected($ld_rt, $val); ?>><?php echo esc_html($text ?: 'All'); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:12px; color:#646970;">Search</label>
+                        <input type="text" name="ld_q" value="<?php echo esc_attr($ld_q); ?>" placeholder="slug or target URL" />
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:12px; color:#646970;">Per page</label>
+                        <input type="number" name="ld_pp" value="<?php echo esc_attr($ld_pp); ?>" min="10" max="200" />
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="button button-primary" type="submit">Filter</button>
+                        <a class="button" href="<?php echo esc_url(add_query_arg(['page'=>'leadstream-analytics-injector','tab'=>'links'], admin_url('admin.php'))); ?>">Reset</a>
+                        <a class="button button-secondary" href="<?php echo esc_url(add_query_arg(array_merge($_GET, ['ld_export'=>'csv']))); ?>">Export CSV</a>
+                    </div>
+                </form>
+
+                <div style="margin-bottom:8px; color:#646970; font-size:12px;">Showing <?php echo number_format(min($ld_pp, max(0, $ld_total - $ld_offset))); ?> of <?php echo number_format($ld_total); ?> link<?php echo $ld_total==1?'':'s'; ?>.</div>
+
+                <table class="widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th width="18%">Slug</th>
+                            <th>Target URL</th>
+                            <th width="10%">Redirect</th>
+                            <th width="14%">Created</th>
+                            <th width="10%">Clicks</th>
+                            <th width="16%">Last Click</th>
+                            <th width="16%">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($ld_rows)): ?>
+                            <tr><td colspan="7" style="text-align:center; color:#646970;">No links found for the selected filters.</td></tr>
+                        <?php else: foreach ($ld_rows as $row): ?>
+                        <?php $short = home_url('/l/' . $row->slug); $ts = $row->last_click ? strtotime($row->last_click) : 0; ?>
+                        <tr>
+                            <td><a href="<?php echo esc_url($short); ?>" target="_blank">/l/<?php echo esc_html($row->slug); ?></a></td>
+                            <td><a href="<?php echo esc_url($row->target_url); ?>" target="_blank" title="<?php echo esc_attr($row->target_url); ?>"><?php echo esc_html(wp_trim_words($row->target_url, 10, '…')); ?></a></td>
+                            <td><code><?php echo esc_html($row->redirect_type ?: '301'); ?></code></td>
+                            <td><?php echo esc_html(date_i18n('M j, Y', strtotime($row->created_at))); ?></td>
+                            <td><strong><?php echo number_format((int)$row->total_clicks); ?></strong></td>
+                            <td><?php echo $ts ? esc_html(date_i18n('M j, Y g:i A', $ts)) : '<span style="color:#646970;">—</span>'; ?></td>
+                            <td>
+                                <a href="<?php echo esc_url(admin_url('admin.php?page=leadstream-analytics-injector&tab=links&action=edit&id=' . intval($row->id))); ?>" class="button button-small">Edit</a>
+                                <button type="button" class="button button-small" onclick="navigator.clipboard.writeText('<?php echo esc_js($short); ?>'); this.innerText='Copied'; setTimeout(()=>this.innerText='Copy',1200);">Copy</button>
+                                <a href="<?php echo esc_url($short); ?>" target="_blank" class="button button-small">Test</a>
+                            </td>
+                        </tr>
+                        <?php endforeach; endif; ?>
+                    </tbody>
+                </table>
+
+                <?php if ($ld_total_pages > 1):
+                    echo '<div class="tablenav"><div class="tablenav-pages">';
+                    for ($i=1; $i<=$ld_total_pages; $i++) {
+                        $url = add_query_arg(array_merge($_GET, ['ld_p'=>$i]));
+                        $style = $i==$ld_p ? 'font-weight:600;' : '';
+                        echo '<a class="page-numbers" style="margin-right:6px; ' . esc_attr($style) . '" href="' . esc_url($url) . '">' . intval($i) . '</a>';
+                    }
+                    echo '</div></div>';
+                endif; ?>
+            </div>
+            <?php
+                $to = isset($_GET['l_to']) ? sanitize_text_field($_GET['l_to']) : '';
+                $slug = isset($_GET['l_slug']) ? sanitize_title($_GET['l_slug']) : '';
+                $page_q = isset($_GET['l_q']) ? sanitize_text_field($_GET['l_q']) : '';
+                $per_page = isset($_GET['l_pp']) ? max(10, min(200, intval($_GET['l_pp']))) : 50;
+                $paged = isset($_GET['l_p']) ? max(1, intval($_GET['l_p'])) : 1;
+                $export = isset($_GET['l_export']) && $_GET['l_export'] === 'csv';
+
+                $where = ["c.link_type = 'link'"]; $params = [];
+                if ($from) { $where[] = 'c.clicked_at >= %s'; $params[] = $from . ' 00:00:00'; }
+                if ($to) { $where[] = 'c.clicked_at <= %s'; $params[] = $to . ' 23:59:59'; }
+                if ($slug) { $where[] = 'l.slug = %s'; $params[] = $slug; }
+                if ($page_q) { $like = '%' . $wpdb->esc_like($page_q) . '%'; $where[] = '(c.page_title LIKE %s OR c.page_url LIKE %s)'; $params[] = $like; $params[] = $like; }
+                $where_sql = implode(' AND ', $where);
+
+                if ($export && current_user_can('manage_options')) {
+                    // Ensure no prior output breaks CSV headers.
+                    if (function_exists('ob_get_level')) { while (ob_get_level()) { ob_end_clean(); } }
+                    $csv_sql = "SELECT c.click_date, c.click_time, l.slug, l.target_url, c.page_title, c.page_url, c.ip_address, c.referrer, c.clicked_at
+                                FROM {$table_c} c LEFT JOIN {$table_l} l ON c.link_id = l.id
+                                WHERE {$where_sql} ORDER BY c.clicked_at DESC LIMIT %d";
+                    $rows = $wpdb->get_results($wpdb->prepare($csv_sql, array_merge($params, [10000])), ARRAY_A);
+                    header('Content-Type: text/csv; charset=utf-8');
+                    header('Content-Disposition: attachment; filename=leadstream-link-clicks.csv');
+                    $out = fopen('php://output', 'w');
+                    fputcsv($out, array_keys(reset($rows) ?: ['click_date','click_time','slug','target_url','page_title','page_url','ip_address','referrer','clicked_at']));
+                    foreach ($rows as $r) { fputcsv($out, $r); }
+                    fclose($out); exit;
+                }
+
+                $count_sql = "SELECT COUNT(*) FROM {$table_c} c LEFT JOIN {$table_l} l ON c.link_id = l.id WHERE {$where_sql}";
+                $total_count = (int) $wpdb->get_var($wpdb->prepare($count_sql, $params));
+                $offset = ($paged - 1) * $per_page;
+
+                $data_sql = "SELECT c.click_date, c.click_time, c.clicked_at, l.slug, l.target_url, c.page_title, c.page_url, c.ip_address, c.referrer
+                             FROM {$table_c} c LEFT JOIN {$table_l} l ON c.link_id = l.id
+                             WHERE {$where_sql}
+                             ORDER BY c.clicked_at DESC
+                             LIMIT %d OFFSET %d";
+                $rows = $wpdb->get_results($wpdb->prepare($data_sql, array_merge($params, [$per_page, $offset])));
+                $slugs = $wpdb->get_col("SELECT slug FROM {$table_l} ORDER BY created_at DESC");
+            ?>
+            <div style="margin-top: 20px;">
+                <h3>📒 All Link Clicks</h3>
+                <form method="get" style="margin-bottom: 12px; display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:10px; align-items:end;">
+                    <input type="hidden" name="page" value="leadstream-analytics-injector" />
+                    <input type="hidden" name="tab" value="links" />
+                    <div>
+                        <label style="display:block; font-size:12px; color:#646970;">From</label>
+                        <input type="date" name="l_from" value="<?php echo esc_attr($from); ?>" />
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:12px; color:#646970;">To</label>
+                        <input type="date" name="l_to" value="<?php echo esc_attr($to); ?>" />
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:12px; color:#646970;">Slug</label>
+                        <select name="l_slug">
+                            <option value="">All</option>
+                            <?php foreach ($slugs as $s): ?>
+                                <option value="<?php echo esc_attr($s); ?>" <?php selected($slug, $s); ?>>/l/<?php echo esc_html($s); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:12px; color:#646970;">Page contains</label>
+                        <input type="text" name="l_q" value="<?php echo esc_attr($page_q); ?>" placeholder="/landing, Title..." />
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:12px; color:#646970;">Per page</label>
+                        <input type="number" name="l_pp" value="<?php echo esc_attr($per_page); ?>" min="10" max="200" />
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="button button-primary" type="submit">Filter</button>
+                        <a class="button" href="<?php echo esc_url(add_query_arg(['page'=>'leadstream-analytics-injector','tab'=>'links'], admin_url('admin.php'))); ?>">Reset</a>
+                        <a class="button button-secondary" href="<?php echo esc_url(add_query_arg(array_merge($_GET, ['l_export'=>'csv']))); ?>">Export CSV</a>
+                    </div>
+                </form>
+
+                <div style="margin-bottom:8px; color:#646970; font-size:12px;">Showing <?php echo number_format(min($per_page, max(0, $total_count - $offset))); ?> of <?php echo number_format($total_count); ?> result<?php echo $total_count==1?'':'s'; ?>.</div>
+
+                <table class="widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th width="12%">Date</th>
+                            <th width="10%">Time</th>
+                            <th width="18%">Pretty Link</th>
+                            <th>Page</th>
+                            <th width="12%">IP</th>
+                            <th width="16%">Referrer</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($rows)): ?>
+                        <tr><td colspan="6" style="text-align:center; color:#646970;">No clicks found for the selected filters.</td></tr>
+                        <?php else: foreach ($rows as $r): ?>
+                        <?php $ts = strtotime($r->clicked_at);
+                            $date_str = !empty($r->click_date) ? esc_html(date_i18n('M j, Y', strtotime($r->click_date))) : esc_html(date_i18n('M j, Y', $ts));
+                            $time_str = !empty($r->click_time) ? esc_html(date_i18n('g:i A', strtotime($r->click_time))) : esc_html(date_i18n('g:i A', $ts));
+                        ?>
+                        <tr>
+                            <td><?php echo $date_str; ?></td>
+                            <td><?php echo $time_str; ?></td>
+                            <td>
+                                <?php if (!empty($r->slug)): ?>
+                                    <a href="<?php echo esc_url(home_url('/l/' . $r->slug)); ?>" target="_blank">/l/<?php echo esc_html($r->slug); ?></a>
+                                <?php else: ?>
+                                    <span style="color:#646970;">(deleted)</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php if (!empty($r->page_url)): ?>
+                                    <a href="<?php echo esc_url($r->page_url); ?>" target="_blank" title="<?php echo esc_attr($r->page_title ?: $r->page_url); ?>">
+                                        <?php echo esc_html($r->page_title ?: $r->page_url); ?>
+                                    </a>
+                                <?php else: ?>
+                                    <span style="color:#646970;">(no page)</span>
+                                <?php endif; ?>
+                            </td>
+                            <td><code><?php echo esc_html($r->ip_address ?: ''); ?></code></td>
+                            <td><?php echo esc_html(wp_parse_url($r->referrer)['host'] ?? $r->referrer ?? ''); ?></td>
+                        </tr>
+                        <?php endforeach; endif; ?>
+                    </tbody>
+                </table>
+
+                <?php $total_pages = max(1, ceil($total_count / $per_page));
+                if ($total_pages > 1):
+                    echo '<div class="tablenav"><div class="tablenav-pages">';
+                    for ($i=1; $i<=$total_pages; $i++) {
+                        $url = add_query_arg(array_merge($_GET, ['l_p'=>$i]));
+                        $style = $i==$paged ? 'font-weight:600;' : '';
+                        echo '<a class="page-numbers" style="margin-right:6px; ' . esc_attr($style) . '" href="' . esc_url($url) . '">' . intval($i) . '</a>';
+                    }
+                    echo '</div></div>';
+                endif; ?>
+            </div>
+            <?php endif; ?>
         </div>
         <?php
     }
@@ -1142,7 +2212,8 @@ document.addEventListener('wpformsSubmit', function (event) {
     private static function render_add_link_form() {
         // Get form values to preserve on validation errors
         $slug = isset($_POST['slug']) ? sanitize_title($_POST['slug']) : '';
-        $target_url = isset($_POST['target_url']) ? esc_url_raw($_POST['target_url']) : '';
+    $target_url = isset($_POST['target_url']) ? esc_url_raw($_POST['target_url']) : '';
+    $redirect_type = isset($_POST['redirect_type']) ? sanitize_text_field($_POST['redirect_type']) : '301';
         
         ?>
         <div class="wrap">
@@ -1200,6 +2271,7 @@ document.addEventListener('wpformsSubmit', function (event) {
                                                value="<?php echo esc_attr($slug); ?>" 
                                                placeholder="summer-sale"
                                                autocomplete="off">
+                                        <button type="button" class="button" id="btn-generate-slug" style="margin-left:8px;">Generate Short Slug</button>
                                         
                                         <!-- Live Preview -->
                                         <div id="slug-preview" style="margin-top: 8px; padding: 8px 12px; background: #f6f7f7; border-left: 4px solid #00a0d2; border-radius: 3px; display: none;">
@@ -1221,6 +2293,19 @@ document.addEventListener('wpformsSubmit', function (event) {
                                                value="<?php echo esc_attr($target_url); ?>" 
                                                placeholder="https://partner.com/product?utm_source=email&utm_campaign=summer&ref=123">
                                         <p class="description">Paste your long, complex URL here (with UTM parameters, tracking codes, affiliate links, etc.). We'll turn it into a clean, shareable link that's perfect for social media and email campaigns.</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row"><label for="redirect_type">Redirect Type</label></th>
+                                    <td>
+                                        <select id="redirect_type" name="redirect_type">
+                                            <?php $rt = in_array($redirect_type, ['301','302','307','308'], true) ? $redirect_type : '301'; ?>
+                                            <option value="301" <?php selected($rt,'301'); ?>>301 (Moved Permanently)</option>
+                                            <option value="302" <?php selected($rt,'302'); ?>>302 (Found/Temporary)</option>
+                                            <option value="307" <?php selected($rt,'307'); ?>>307 (Temporary, method preserved)</option>
+                                            <option value="308" <?php selected($rt,'308'); ?>>308 (Permanent, method preserved)</option>
+                                        </select>
+                                        <p class="description">Choose the HTTP status code used for redirects. 301 is typical for permanent short links.</p>
                                     </td>
                                 </tr>
                             </tbody>
@@ -1289,6 +2374,24 @@ document.addEventListener('wpformsSubmit', function (event) {
                     feedbackDiv.html('<span style="color: #666;">Could not check availability</span>');
                 });
             }
+
+            // Generate short slug
+            $('#btn-generate-slug').on('click', function() {
+                feedbackDiv.html('<span style="color: #666;">⏳ Generating...</span>');
+                $.post(ajaxurl, {
+                    action: 'ls_generate_short_slug',
+                    nonce: '<?php echo wp_create_nonce('ls_generate_slug'); ?>'
+                }).done(function(res) {
+                    if (res && res.success && res.data.slug) {
+                        slugInput.val(res.data.slug).trigger('input');
+                        feedbackDiv.html('<span style="color: #00a32a;">✓ Short slug generated</span>');
+                    } else {
+                        feedbackDiv.html('<span style="color: #d63638;">Could not generate slug</span>');
+                    }
+                }).fail(function(){
+                    feedbackDiv.html('<span style="color: #d63638;">Error generating slug</span>');
+                });
+            });
             
             // Pre-populate if there's an existing value
             if (slugInput.val()) {
@@ -1318,7 +2421,8 @@ document.addEventListener('wpformsSubmit', function (event) {
             wp_die('Link not found');
         }
 
-        ?>
+    $redirect_type = $link->redirect_type ?? '301';
+    ?>
         <div class="wrap">
             <h1 class="wp-heading-inline">Edit Pretty Link</h1>
             <a href="<?php echo admin_url('admin.php?page=leadstream-analytics-injector&tab=links'); ?>" class="page-title-action">Back to Links</a>
@@ -1350,6 +2454,7 @@ document.addEventListener('wpformsSubmit', function (event) {
                                                title="Only lowercase letters, numbers, and dashes allowed"
                                                value="<?php echo esc_attr($link->slug); ?>"
                                                autocomplete="off">
+                                        <button type="button" class="button" id="btn-generate-slug" style="margin-left:8px;">Generate Short Slug</button>
                                         
                                         <!-- Live Preview -->
                                         <div id="slug-preview" style="margin-top: 8px; padding: 8px 12px; background: #f6f7f7; border-left: 4px solid #00a0d2; border-radius: 3px;">
@@ -1370,6 +2475,18 @@ document.addEventListener('wpformsSubmit', function (event) {
                                         <input type="url" id="target_url" name="target_url" class="regular-text" required
                                                value="<?php echo esc_attr($link->target_url); ?>">
                                         <p class="description">The full URL to redirect to when someone visits your pretty link.</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row"><label for="redirect_type">Redirect Type</label></th>
+                                    <td>
+                                        <select id="redirect_type" name="redirect_type">
+                                            <?php $rt = in_array($redirect_type, ['301','302','307','308'], true) ? $redirect_type : '301'; ?>
+                                            <option value="301" <?php selected($rt,'301'); ?>>301 (Moved Permanently)</option>
+                                            <option value="302" <?php selected($rt,'302'); ?>>302 (Found/Temporary)</option>
+                                            <option value="307" <?php selected($rt,'307'); ?>>307 (Temporary, method preserved)</option>
+                                            <option value="308" <?php selected($rt,'308'); ?>>308 (Permanent, method preserved)</option>
+                                        </select>
                                     </td>
                                 </tr>
                             </tbody>
@@ -1441,6 +2558,24 @@ document.addEventListener('wpformsSubmit', function (event) {
                     feedbackDiv.html('<span style="color: #666;">Could not check availability</span>');
                 });
             }
+
+            // Generate short slug (edit)
+            $('#btn-generate-slug').on('click', function() {
+                feedbackDiv.html('<span style="color: #666;">⏳ Generating...</span>');
+                $.post(ajaxurl, {
+                    action: 'ls_generate_short_slug',
+                    nonce: '<?php echo wp_create_nonce('ls_generate_slug'); ?>'
+                }).done(function(res) {
+                    if (res && res.success && res.data.slug) {
+                        slugInput.val(res.data.slug).trigger('input');
+                        feedbackDiv.html('<span style="color: #00a32a;">✓ Short slug generated</span>');
+                    } else {
+                        feedbackDiv.html('<span style="color: #d63638;">Could not generate slug</span>');
+                    }
+                }).fail(function(){
+                    feedbackDiv.html('<span style="color: #d63638;">Error generating slug</span>');
+                });
+            });
             
             // Update real-time example when fields change
             $('#slug, #target_url').on('input', function() {
@@ -1476,6 +2611,9 @@ document.addEventListener('wpformsSubmit', function (event) {
         if (isset($_POST['ls_add_link_nonce']) && wp_verify_nonce($_POST['ls_add_link_nonce'], 'ls_add_link')) {
             $slug = sanitize_title($_POST['slug'] ?? '');
             $target_url = esc_url_raw($_POST['target_url'] ?? '');
+            $redirect_type = isset($_POST['redirect_type']) && in_array($_POST['redirect_type'], ['301','302','307','308'], true)
+                ? $_POST['redirect_type']
+                : '301';
             
             // Use WP_Error for better error handling
             $errors = new \WP_Error();
@@ -1517,9 +2655,10 @@ document.addEventListener('wpformsSubmit', function (event) {
                         [
                             'slug' => $slug,
                             'target_url' => $target_url,
+                            'redirect_type' => $redirect_type,
                             'created_at' => current_time('mysql')
                         ],
-                        ['%s', '%s', '%s']
+                        ['%s', '%s', '%s', '%s']
                     );
                     
                     if ($result !== false) {
@@ -1553,6 +2692,9 @@ document.addEventListener('wpformsSubmit', function (event) {
             $id = intval($_POST['id'] ?? 0);
             $slug = sanitize_title($_POST['slug'] ?? '');
             $target_url = esc_url_raw($_POST['target_url'] ?? '');
+            $redirect_type = isset($_POST['redirect_type']) && in_array($_POST['redirect_type'], ['301','302','307','308'], true)
+                ? $_POST['redirect_type']
+                : '301';
             
             // Use WP_Error for better error handling
             $errors = new \WP_Error();
@@ -1600,9 +2742,10 @@ document.addEventListener('wpformsSubmit', function (event) {
                         [
                             'slug' => $slug,
                             'target_url' => $target_url,
+                            'redirect_type' => $redirect_type,
                         ],
                         ['id' => $id],
-                        ['%s', '%s'],
+                        ['%s', '%s', '%s'],
                         ['%d']
                     );
                     
@@ -1758,13 +2901,13 @@ document.addEventListener('wpformsSubmit', function (event) {
         
         // Get basic stats
         $total_links = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}ls_links");
-        $total_clicks = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}ls_clicks");
+        $total_clicks = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}ls_clicks WHERE link_type = 'link'");
         $clicks_today = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->prefix}ls_clicks WHERE DATE(clicked_at) = %s",
+            "SELECT COUNT(*) FROM {$wpdb->prefix}ls_clicks WHERE link_type = 'link' AND DATE(clicked_at) = %s",
             current_time('Y-m-d')
         ));
         $clicks_this_week = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->prefix}ls_clicks WHERE clicked_at >= %s",
+            "SELECT COUNT(*) FROM {$wpdb->prefix}ls_clicks WHERE link_type = 'link' AND clicked_at >= %s",
             date('Y-m-d', strtotime('-7 days'))
         ));
         
@@ -1785,22 +2928,22 @@ document.addEventListener('wpformsSubmit', function (event) {
         ?>
         <div class="leadstream-stats-summary" style="margin: 20px 0; display: flex; gap: 15px; flex-wrap: wrap;">
             <div class="stat-box" style="background: #fff; border: 1px solid #c3c4c7; border-radius: 4px; padding: 15px; min-width: 140px; text-align: center; box-shadow: 0 1px 1px rgba(0,0,0,0.04);">
-                <div style="font-size: 24px; font-weight: 600; color: #2271b1; line-height: 1;"><?php echo number_format($total_links); ?></div>
+                <div style="font-size: 24px; font-weight: 600; color: #2271b1; line-height: 1;"><?php echo number_format((int)$total_links); ?></div>
                 <div style="font-size: 13px; color: #646970; margin-top: 4px;">Total Links</div>
             </div>
             
             <div class="stat-box" style="background: #fff; border: 1px solid #c3c4c7; border-radius: 4px; padding: 15px; min-width: 140px; text-align: center; box-shadow: 0 1px 1px rgba(0,0,0,0.04);">
-                <div style="font-size: 24px; font-weight: 600; color: #00a32a; line-height: 1;"><?php echo number_format($total_clicks); ?></div>
+                <div style="font-size: 24px; font-weight: 600; color: #00a32a; line-height: 1;"><?php echo number_format((int)$total_clicks); ?></div>
                 <div style="font-size: 13px; color: #646970; margin-top: 4px;">Total Clicks</div>
             </div>
             
             <div class="stat-box" style="background: #fff; border: 1px solid #c3c4c7; border-radius: 4px; padding: 15px; min-width: 140px; text-align: center; box-shadow: 0 1px 1px rgba(0,0,0,0.04);">
-                <div style="font-size: 24px; font-weight: 600; color: #dba617; line-height: 1;"><?php echo number_format($clicks_today); ?></div>
+                <div style="font-size: 24px; font-weight: 600; color: #dba617; line-height: 1;"><?php echo number_format((int)$clicks_today); ?></div>
                 <div style="font-size: 13px; color: #646970; margin-top: 4px;">Today</div>
             </div>
             
             <div class="stat-box" style="background: #fff; border: 1px solid #c3c4c7; border-radius: 4px; padding: 15px; min-width: 140px; text-align: center; box-shadow: 0 1px 1px rgba(0,0,0,0.04);">
-                <div style="font-size: 24px; font-weight: 600; color: #72aee6; line-height: 1;"><?php echo number_format($clicks_this_week); ?></div>
+                <div style="font-size: 24px; font-weight: 600; color: #72aee6; line-height: 1;"><?php echo number_format((int)$clicks_this_week); ?></div>
                 <div style="font-size: 13px; color: #646970; margin-top: 4px;">This Week</div>
             </div>
             
@@ -1854,6 +2997,43 @@ document.addEventListener('wpformsSubmit', function (event) {
             'available' => ($existing == 0),
             'slug' => $slug
         ]);
+    }
+
+    /**
+     * AJAX: Generate a unique short slug (6-8 chars)
+     */
+    public static function ajax_generate_short_slug() {
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'ls_generate_slug')) {
+            wp_send_json_error('Invalid nonce');
+        }
+
+        global $wpdb;
+        $max_tries = 10;
+        $slug = '';
+        for ($i=0; $i<$max_tries; $i++) {
+            // Base32-like alphabet without confusing chars 0,O,1,l
+            $alphabet = '23456789abcdefghijkmnpqrstuvwxyz';
+            $len = rand(6, 8);
+            $candidate = '';
+            for ($j=0; $j<$len; $j++) {
+                $candidate .= $alphabet[random_int(0, strlen($alphabet)-1)];
+            }
+
+            // Ensure uniqueness
+            $exists = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->prefix}ls_links WHERE slug = %s",
+                $candidate
+            ));
+            if (!$exists) { $slug = $candidate; break; }
+        }
+
+        if (empty($slug)) {
+            wp_send_json_error('Could not generate unique slug');
+        }
+        wp_send_json_success(['slug' => $slug]);
     }
 
     /**
@@ -1911,5 +3091,326 @@ document.addEventListener('wpformsSubmit', function (event) {
         }
         </script>
         <?php
+    }
+
+    /**
+     * Add dashboard widget for Pretty Links stats
+     */
+    public static function add_dashboard_widget() {
+        // Only show to users who can manage options
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+
+        // Check if Pretty Links tables exist
+        global $wpdb;
+        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$wpdb->prefix}ls_links'");
+        
+        if (!$table_exists) {
+            return; // Don't show widget if tables don't exist
+        }
+
+        wp_add_dashboard_widget(
+            'leadstream_pretty_links_widget',
+            '🎯 LeadStream: Pretty Links Stats',
+            [__CLASS__, 'render_dashboard_widget'],
+            [__CLASS__, 'render_dashboard_widget_config'],
+            null,
+            'normal',
+            'high'
+        );
+    }
+
+    /**
+     * Render the dashboard widget content
+     */
+    public static function render_dashboard_widget() {
+        global $wpdb;
+        
+        // Get total stats
+        $total_links = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}ls_links");
+        $total_clicks = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}ls_clicks WHERE link_type = 'link'");
+        
+        // Get clicks this week
+        $week_start = date('Y-m-d H:i:s', strtotime('monday this week'));
+        $clicks_this_week = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}ls_clicks WHERE link_type = 'link' AND clicked_at >= %s",
+            $week_start
+        ));
+        
+        // Get clicks today
+        $today_start = date('Y-m-d 00:00:00');
+        $clicks_today = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}ls_clicks WHERE link_type = 'link' AND clicked_at >= %s",
+            $today_start
+        ));
+        
+        // Get top 5 links this week
+        $top_links = $wpdb->get_results($wpdb->prepare(
+            "SELECT l.slug, l.target_url, COUNT(c.id) as click_count
+             FROM {$wpdb->prefix}ls_links l
+             LEFT JOIN {$wpdb->prefix}ls_clicks c ON l.id = c.link_id AND c.link_type = 'link' AND c.clicked_at >= %s
+             GROUP BY l.id
+             ORDER BY click_count DESC, l.created_at DESC
+             LIMIT 5",
+            $week_start
+        ));
+        
+        // Get overall sparkline data (last 14 days for better trend visualization)
+        $sparkline_data = [];
+        for ($i = 13; $i >= 0; $i--) {
+            $date = date('Y-m-d', strtotime("-{$i} days"));
+            $clicks = $wpdb->get_var($wpdb->prepare("
+                SELECT COUNT(*) 
+                FROM {$wpdb->prefix}ls_clicks 
+                WHERE link_type = 'link' AND DATE(clicked_at) = %s
+            ", $date));
+            $sparkline_data[] = intval($clicks);
+        }
+        
+        ?>
+        <div class="leadstream-dashboard-widget">
+            
+            <!-- Custom Widget Header with Logo -->
+            <div style="display: flex; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #f0f0f1;">
+                <img src="<?php echo plugins_url('assets/Lead-stream-logo-Small.png', dirname(dirname(__FILE__))); ?>" 
+                     alt="LeadStream Logo" 
+                     style="width: 36px; height: 40px; margin-right: 12px; border-radius: 4px; object-fit: contain; vertical-align: bottom;">
+                <div>
+                    <h3 style="margin: 0; font-size: 16px; color: #1d2327; font-weight: 600;">
+                        Pretty Links Dashboard
+                    </h3>
+                    <div style="font-size: 12px; color: #646970; margin-top: 2px;">
+                        Track your link performance
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Summary Stats -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                <div style="text-align: center; padding: 15px; background: #f0f6fc; border-radius: 6px; border-left: 4px solid #2271b1;">
+                    <div style="font-size: 24px; font-weight: 600; color: #1d2327; margin-bottom: 4px;">
+                        <?php echo number_format($total_links); ?>
+                    </div>
+                    <div style="font-size: 12px; color: #50575e; text-transform: uppercase; letter-spacing: 0.5px;">
+                        Total Links
+                    </div>
+                </div>
+                
+                <div style="text-align: center; padding: 15px; background: #f0f8f0; border-radius: 6px; border-left: 4px solid #00a32a;">
+                    <div style="font-size: 24px; font-weight: 600; color: #1d2327; margin-bottom: 4px;">
+                        <?php echo number_format($total_clicks); ?>
+                    </div>
+                    <div style="font-size: 12px; color: #50575e; text-transform: uppercase; letter-spacing: 0.5px;">
+                        All-Time Clicks
+                    </div>
+                </div>
+                
+                <div style="text-align: center; padding: 15px; background: #fff8e1; border-radius: 6px; border-left: 4px solid #dba617;">
+                    <div style="font-size: 24px; font-weight: 600; color: #1d2327; margin-bottom: 4px;">
+                        <?php echo number_format($clicks_this_week); ?>
+                    </div>
+                    <div style="font-size: 12px; color: #50575e; text-transform: uppercase; letter-spacing: 0.5px;">
+                        This Week
+                    </div>
+                </div>
+                
+                <div style="text-align: center; padding: 15px; background: #fdf2f2; border-radius: 6px; border-left: 4px solid #d63638;">
+                    <div style="font-size: 24px; font-weight: 600; color: #1d2327; margin-bottom: 4px;">
+                        <?php echo number_format($clicks_today); ?>
+                    </div>
+                    <div style="font-size: 12px; color: #50575e; text-transform: uppercase; letter-spacing: 0.5px;">
+                        Today
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Activity Sparkline -->
+            <?php if (array_sum($sparkline_data) > 0): ?>
+            <div style="margin-bottom: 20px; padding: 15px; background: #fff; border: 1px solid #dcdcde; border-radius: 6px;">
+                <h4 style="margin: 0 0 12px 0; font-size: 14px; color: #1d2327; display: flex; align-items: center; gap: 6px;">
+                    📊 Activity Trend (14 Days)
+                    <?php 
+                    // Calculate overall trend
+                    $first_week = array_sum(array_slice($sparkline_data, 0, 7));
+                    $second_week = array_sum(array_slice($sparkline_data, 7, 7));
+                    if ($second_week > $first_week) {
+                        echo '<span style="color: #00a32a; font-size: 12px;">📈 Trending Up</span>';
+                    } elseif ($second_week < $first_week) {
+                        echo '<span style="color: #d63638; font-size: 12px;">📉 Trending Down</span>';
+                    } else {
+                        echo '<span style="color: #646970; font-size: 12px;">➡️ Steady</span>';
+                    }
+                    ?>
+                </h4>
+                <?php echo self::render_widget_sparkline($sparkline_data); ?>
+            </div>
+            <?php endif; ?>
+            
+            <!-- Top Links This Week -->
+            <?php if (!empty($top_links)): ?>
+            <div style="margin-bottom: 15px;">
+                <h4 style="margin: 0 0 12px 0; font-size: 14px; color: #1d2327;">📈 Top Links This Week</h4>
+                <div style="background: #fff; border: 1px solid #dcdcde; border-radius: 4px;">
+                    <?php foreach ($top_links as $i => $link): ?>
+                    <div style="padding: 12px 15px; border-bottom: 1px solid #f0f0f1; display: flex; justify-content: space-between; align-items: center; <?php echo ($i === count($top_links) - 1) ? 'border-bottom: none;' : ''; ?>">
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-weight: 600; font-size: 13px; color: #0073aa; margin-bottom: 2px;">
+                                /l/<?php echo esc_html($link->slug); ?>
+                            </div>
+                            <div style="font-size: 11px; color: #646970; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                → <?php echo esc_html(wp_trim_words($link->target_url, 8, '...')); ?>
+                            </div>
+                        </div>
+                        <div style="margin-left: 10px; text-align: right;">
+                            <div style="font-weight: 600; font-size: 14px; color: #1d2327;">
+                                <?php echo number_format($link->click_count); ?>
+                            </div>
+                            <div style="font-size: 11px; color: #646970;">
+                                click<?php echo $link->click_count == 1 ? '' : 's'; ?>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+            
+            <!-- Quick Actions - Full Navigation -->
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding-top: 15px; border-top: 1px solid #f0f0f1;">
+                <a href="<?php echo admin_url('admin.php?page=leadstream-analytics-injector&tab=links'); ?>" 
+                   class="button button-primary button-small ls-widget-btn">
+                    📊 Dashboard
+                </a>
+                <a href="<?php echo admin_url('admin.php?page=leadstream-analytics-injector&tab=links&action=add'); ?>" 
+                   class="button button-secondary button-small ls-widget-btn">
+                    ➕ Add Link
+                </a>
+                <a href="<?php echo admin_url('admin.php?page=leadstream-analytics-injector&tab=utm'); ?>" 
+                   class="button button-secondary button-small ls-widget-btn">
+                    🔗 UTM Builder
+                </a>
+                <a href="<?php echo admin_url('admin.php?page=leadstream-analytics-injector&tab=javascript'); ?>" 
+                   class="button button-secondary button-small ls-widget-btn">
+                    📝 Code Inject
+                </a>
+            </div>
+            
+            <?php if ($total_links == 0): ?>
+            <div style="text-align: center; padding: 20px; color: #646970;">
+                <div style="font-size: 14px; margin-bottom: 10px;">🚀 Ready to start tracking?</div>
+                <div style="font-size: 12px; line-height: 1.4;">
+                    Create your first Pretty Link to see stats here!
+                </div>
+            </div>
+            <?php endif; ?>
+        </div>
+        
+        <style>
+        .leadstream-dashboard-widget .button-small {
+            font-size: 11px;
+            padding: 4px 8px;
+            height: auto;
+            line-height: 1.4;
+        }
+        .leadstream-dashboard-widget .ls-widget-btn {
+            text-align: center;
+            font-size: 10px;
+            padding: 6px 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+        }
+        .leadstream-dashboard-widget .ls-widget-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        </style>
+        <?php
+    }
+
+    /**
+     * Dashboard widget configuration
+     */
+    public static function render_dashboard_widget_config() {
+        // Empty function - required for widget registration but we don't need config options
+    }
+    
+    /**
+     * Render a larger sparkline for the dashboard widget
+     */
+    private static function render_widget_sparkline($data) {
+        if (empty($data) || array_sum($data) == 0) {
+            return '<div style="text-align: center; color: #646970; font-size: 12px; padding: 20px;">No click data available</div>';
+        }
+        
+        $max = max($data);
+        $svg_height = 60;
+        $svg_width = 280;
+        $points = [];
+        $bars = [];
+        
+        // Create points for line chart
+        foreach ($data as $i => $value) {
+            $x = ($i / (count($data) - 1)) * $svg_width;
+            $y = $svg_height - (($value / $max) * ($svg_height - 10)) - 5;
+            $points[] = "$x,$y";
+            
+            // Create bars for bar chart overlay
+            $bar_width = ($svg_width / count($data)) * 0.6;
+            $bar_x = ($i * ($svg_width / count($data))) + (($svg_width / count($data)) - $bar_width) / 2;
+            $bar_height = ($value / $max) * ($svg_height - 10);
+            $bar_y = $svg_height - $bar_height - 5;
+            
+            if ($value > 0) {
+                $bars[] = sprintf(
+                    '<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="rgba(34, 113, 177, 0.2)" stroke="rgba(34, 113, 177, 0.4)" stroke-width="0.5"/>',
+                    $bar_x, $bar_y, $bar_width, $bar_height
+                );
+            }
+        }
+        
+        $path = 'M' . implode(' L', $points);
+        $total_clicks = array_sum($data);
+        $avg_clicks = round($total_clicks / count($data), 1);
+        
+        return sprintf(
+            '<div style="text-align: center;">
+                <svg width="%d" height="%d" style="border: 1px solid #dcdcde; background: linear-gradient(to bottom, #fafafa, #f0f0f1); border-radius: 4px; margin-bottom: 10px;">
+                    <!-- Grid lines -->
+                    <defs>
+                        <pattern id="grid" width="20" height="10" patternUnits="userSpaceOnUse">
+                            <path d="M 20 0 L 0 0 0 10" fill="none" stroke="#e0e0e0" stroke-width="0.5" opacity="0.3"/>
+                        </pattern>
+                    </defs>
+                    <rect width="100%%" height="100%%" fill="url(#grid)" />
+                    
+                    <!-- Bars -->
+                    %s
+                    
+                    <!-- Line -->
+                    <polyline points="%s" fill="none" stroke="#2271b1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    
+                    <!-- Data points -->
+                    %s
+                </svg>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #646970;">
+                    <span>14 days ago</span>
+                    <span><strong>%d total clicks</strong> • avg %.1f/day</span>
+                    <span>Today</span>
+                </div>
+            </div>',
+            $svg_width,
+            $svg_height,
+            implode('', $bars),
+            implode(' ', $points),
+            implode('', array_map(function($point, $value) {
+                list($x, $y) = explode(',', $point);
+                return $value > 0 ? sprintf('<circle cx="%.1f" cy="%.1f" r="2" fill="#2271b1"/>', $x, $y) : '';
+            }, $points, $data)),
+            $total_clicks,
+            $avg_clicks
+        );
     }
 }

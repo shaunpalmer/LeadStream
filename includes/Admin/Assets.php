@@ -16,6 +16,9 @@ class Assets {
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_admin_scripts']);
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_utm_builder']);
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_pretty_links']);
+        
+        // Frontend phone tracking
+        add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_phone_tracking']);
     }
     
     /**
@@ -365,5 +368,42 @@ JS;
         }
 
         file_put_contents($file_path, $js_content);
+    }
+    
+    /**
+     * Enqueue phone tracking script on frontend
+     */
+    public static function enqueue_phone_tracking() {
+        // Only enqueue if phone tracking is enabled and numbers are configured
+        $phone_enabled = get_option('leadstream_phone_enabled', 1);
+        $phone_numbers = get_option('leadstream_phone_numbers', array());
+        
+        if (!$phone_enabled || empty($phone_numbers)) {
+            return;
+        }
+        
+        wp_enqueue_script(
+            'leadstream-phone-tracking',
+            plugin_dir_url(dirname(__DIR__)) . 'assets/js/phone-tracking.js',
+            ['jquery'],
+            '1.0.0',
+            true
+        );
+        
+        // Get phone selectors
+        $phone_selectors = get_option('leadstream_phone_selectors', '');
+        
+        // Get GA4 ID if available
+        $ga_id = get_option('leadstream_gtm_id', ''); // You might want to add a dedicated GA4 ID option
+        
+        wp_localize_script('leadstream-phone-tracking', 'LeadStreamPhone', [
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'numbers' => $phone_numbers,
+            'selectors' => $phone_selectors,
+            'nonce' => wp_create_nonce('leadstream_phone_click'),
+            'ga_id' => $ga_id,
+            'debug' => defined('WP_DEBUG') && WP_DEBUG,
+            'show_feedback' => true
+        ]);
     }
 }

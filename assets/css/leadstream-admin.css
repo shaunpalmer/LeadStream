@@ -226,3 +226,259 @@
     padding: 5px 0 20px;
   }
 }
+
+/* ==============================================
+   SPARKLINE STYLES
+   ============================================== */
+
+/* List Table Sparklines */
+.wp-list-table .column-trend {
+    width: 140px;
+}
+
+.ls-sparkline-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ls-sparkline-container svg {
+    border: 1px solid #dcdcde;
+    background: linear-gradient(135deg, #f9f9f9 0%, #f0f0f1 100%);
+    border-radius: 3px;
+    transition: box-shadow 0.2s ease;
+}
+
+.ls-sparkline-container svg:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border-color: #0073aa;
+}
+
+.ls-sparkline-trend {
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+/* Dashboard Widget Sparklines */
+.leadstream-dashboard-widget .ls-widget-sparkline {
+    background: linear-gradient(to bottom, #fafafa, #f0f0f1);
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.leadstream-dashboard-widget .ls-widget-sparkline h4 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: #1d2327;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.leadstream-dashboard-widget .ls-widget-sparkline svg {
+    border: 1px solid #c3c4c7;
+    background: linear-gradient(to bottom, #ffffff, #f6f7f7);
+    border-radius: 4px;
+    display: block;
+    margin: 0 auto 10px auto;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.ls-sparkline-stats {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: #646970;
+    margin-top: 8px;
+}
+
+.ls-trend-indicator {
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ls-trend-indicator.trend-up {
+    color: #00a32a;
+}
+
+.ls-trend-indicator.trend-down {
+    color: #d63638;
+}
+
+.ls-trend-indicator.trend-flat {
+    color: #646970;
+}
+
+/* Responsive sparklines for smaller screens */
+@media (max-width: 782px) {
+    .wp-list-table .column-trend {
+        display: none;
+    }
+    
+    .leadstream-dashboard-widget .ls-widget-sparkline svg {
+        width: 100%;
+        height: auto;
+        max-width: 240px;
+    }
+}
+
+/* ==============================================
+   PHONE TRACKING STYLES
+   ============================================== */
+
+/* Phone tracking form styles */
+.leadstream-phone-tracking .form-table th {
+    width: 200px;
+    vertical-align: top;
+    padding-top: 15px;
+}
+
+.leadstream-phone-tracking .form-table td {
+    padding-top: 10px;
+    padding-bottom: 20px;
+}
+
+.leadstream-phone-tracking textarea {
+    width: 100%;
+    max-width: 600px;
+    font-family: 'SFMono-Regular', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    line-height: 1.4;
+    border: 1px solid #8c8f94;
+    border-radius: 4px;
+    padding: 8px 12px;
+}
+
+.leadstream-phone-tracking textarea:focus {
+    border-color: #2271b1;
+    box-shadow: 0 0 0 1px #2271b1;
+    outline: none;
+}
+
+/* Phone tracking stats grid */
+.ls-phone-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.ls-phone-stat-card {
+    text-align: center;
+    padding: 15px;
+    border-radius: 6px;
+    border-left: 4px solid;
+}
+
+.ls-phone-stat-number {
+    font-size: 24px;
+    font-weight: 600;
+    color: #1d2327;
+    margin-bottom: 4px;
+}
+
+.ls-phone-stat-label {
+    font-size: 12px;
+    color: #50575e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Frontend phone tracking elements */
+.ls-phone-tracked {
+    position: relative;
+}
+
+.ls-phone-clicked {
+    animation: ls-phone-flash 0.3s ease-in-out;
+}
+
+@keyframes ls-phone-flash {
+    0% { background-color: transparent; }
+    50% { background-color: rgba(34, 113, 177, 0.1); }
+    100% { background-color: transparent; }
+}
+
+/* Phone tracking help section */
+.ls-phone-help-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.ls-phone-help-card h4 {
+    color: #2271b1;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.ls-phone-help-card ul {
+    margin: 0;
+    color: #50575e;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.ls-phone-help-card li {
+    margin-bottom: 4px;
+}
+
+/* Phone click history table */
+.leadstream-phone-tracking .widefat {
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.leadstream-phone-tracking .widefat th {
+    background: #f6f7f7;
+    border-bottom: 1px solid #c3c4c7;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.leadstream-phone-tracking .widefat td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.leadstream-phone-tracking .widefat td code {
+    background: #f6f7f7;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+    color: #646970;
+}
+
+/* Responsive adjustments for phone tracking */
+@media (max-width: 782px) {
+    .ls-phone-stats-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
+    .ls-phone-help-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .leadstream-phone-tracking .form-table th,
+    .leadstream-phone-tracking .form-table td {
+        display: block;
+        width: 100%;
+        padding: 10px 0;
+    }
+    
+    .leadstream-phone-tracking .form-table th {
+        border-bottom: none;
+    }
+}

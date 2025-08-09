@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeadStream Phone Tracking Test Page</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            max-width: 800px; 
+            margin: 40px auto; 
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { 
+            color: #2271b1; 
+            border-bottom: 3px solid #2271b1;
+            padding-bottom: 10px;
+        }
+        .phone-section {
+            margin: 30px 0;
+            padding: 20px;
+            border-left: 4px solid #00a32a;
+            background: #f0f8f0;
+        }
+        .phone-link {
+            display: inline-block;
+            padding: 12px 24px;
+            margin: 8px;
+            background: #2271b1;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        .phone-link:hover {
+            background: #135e96;
+            transform: translateY(-2px);
+        }
+        .custom-phone-btn {
+            display: inline-block;
+            padding: 15px 30px;
+            margin: 8px;
+            background: #00a32a;
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .custom-phone-btn:hover {
+            background: #008a00;
+            transform: scale(1.05);
+        }
+        .pretty-link {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 8px;
+            background: #dba617;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .test-log {
+            background: #1e1e1e;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin: 20px 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            padding: 15px;
+            background: #f0f6fc;
+            border-radius: 6px;
+            text-align: center;
+            border-left: 4px solid #2271b1;
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1d2327;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #50575e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📞 LeadStream Phone Tracking Test</h1>
+        <p><strong>This page tests phone click tracking with various phone number formats and custom elements.</strong></p>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="total-clicks">0</div>
+                <div class="stat-label">Total Test Clicks</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="phone-clicks">0</div>
+                <div class="stat-label">Phone Clicks</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="custom-clicks">0</div>
+                <div class="stat-label">Custom Element Clicks</div>
+            </div>
+        </div>
+
+        <div class="phone-section">
+            <h2>📱 Standard Tel: Links</h2>
+            <p>These should be automatically tracked by LeadStream:</p>
+            
+            <a href="tel:+15551234567" class="phone-link">📞 +1 (555) 123-4567</a>
+            <a href="tel:5551234567" class="phone-link">📞 555-123-4567</a>
+            <a href="tel:+1-555-123-4567" class="phone-link">📞 +1-555-123-4567</a>
+            <a href="tel:555.123.4567" class="phone-link">📞 555.123.4567</a>
+        </div>
+
+        <div class="phone-section">
+            <h2>🎯 Custom Phone Elements</h2>
+            <p>These use CSS classes that can be tracked with custom selectors:</p>
+            
+            <button class="custom-phone-btn phone-button" onclick="callPhone('5551234567')">
+                📞 Call Sales Team
+            </button>
+            <button class="custom-phone-btn contact-phone" onclick="callPhone('5551234568')">
+                📞 Contact Support
+            </button>
+            <div class="custom-phone-btn" data-phone="5551234569" onclick="callPhone('5551234569')">
+                📞 Emergency Line
+            </div>
+        </div>
+
+        <div class="phone-section">
+            <h2>🔗 Pretty Links Test</h2>
+            <p>Test pretty link tracking (if any exist):</p>
+            
+            <a href="/l/contact" class="pretty-link">🎯 Contact Page</a>
+            <a href="/l/demo" class="pretty-link">🎯 Demo Request</a>
+            <a href="/l/pricing" class="pretty-link">🎯 Pricing Info</a>
+        </div>
+
+        <div class="phone-section">
+            <h2>📊 Live Test Log</h2>
+            <div class="test-log" id="test-log">
+                [READY] LeadStream Phone Tracking Test Page Loaded<br>
+                [INFO] Click on phone numbers above to see tracking in action<br>
+                [INFO] Check your WordPress admin for analytics data<br>
+            </div>
+            
+            <button onclick="clearLog()" style="margin-top: 10px; padding: 8px 16px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                🗑️ Clear Log
+            </button>
+            <button onclick="testPhoneTracking()" style="margin-top: 10px; margin-left: 10px; padding: 8px 16px; background: #2271b1; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                🧪 Run Auto Test
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let totalClicks = 0;
+        let phoneClicks = 0;
+        let customClicks = 0;
+
+        function log(message, type = 'INFO') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('test-log');
+            const color = type === 'SUCCESS' ? '#00ff00' : type === 'ERROR' ? '#ff4444' : '#00dddd';
+            logDiv.innerHTML += `<span style="color: ${color}">[${timestamp}] [${type}] ${message}</span><br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function updateStats() {
+            document.getElementById('total-clicks').textContent = totalClicks;
+            document.getElementById('phone-clicks').textContent = phoneClicks;
+            document.getElementById('custom-clicks').textContent = customClicks;
+        }
+
+        function callPhone(number) {
+            totalClicks++;
+            customClicks++;
+            updateStats();
+            log(`Custom phone element clicked: ${number}`, 'SUCCESS');
+            
+            // Simulate what LeadStream would do
+            log(`→ Normalizing phone number: ${number}`, 'INFO');
+            log(`→ Sending to analytics...`, 'INFO');
+            log(`→ Recording in database...`, 'INFO');
+            
+            // Actually try to make the call
+            window.location.href = `tel:${number}`;
+        }
+
+        function clearLog() {
+            document.getElementById('test-log').innerHTML = '[READY] Log cleared - ready for new tests<br>';
+        }
+
+        function testPhoneTracking() {
+            log('Starting automated phone tracking test...', 'INFO');
+            
+            // Test different phone formats
+            const phoneNumbers = [
+                '+15551234567',
+                '5551234567', 
+                '+1-555-123-4567',
+                '555.123.4567'
+            ];
+            
+            phoneNumbers.forEach((number, index) => {
+                setTimeout(() => {
+                    log(`Testing phone format: ${number}`, 'INFO');
+                    log(`→ Digits extracted: ${number.replace(/\D/g, '')}`, 'SUCCESS');
+                    log(`→ Would match against configured numbers`, 'INFO');
+                    log(`→ Would send GA4 event: phone_click`, 'SUCCESS');
+                    
+                    totalClicks++;
+                    phoneClicks++;
+                    updateStats();
+                }, (index + 1) * 1000);
+            });
+            
+            setTimeout(() => {
+                log('Automated test complete! 🎉', 'SUCCESS');
+                log('Check WordPress Admin → LeadStream → Phone Tracking for real data', 'INFO');
+            }, 5000);
+        }
+
+        // Track actual tel: link clicks
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.href.startsWith('tel:')) {
+                totalClicks++;
+                phoneClicks++;
+                updateStats();
+                
+                const phoneNumber = e.target.href.replace('tel:', '');
+                log(`Tel: link clicked: ${phoneNumber}`, 'SUCCESS');
+                log(`→ LeadStream would track this automatically`, 'INFO');
+            }
+            
+            if (e.target.classList.contains('pretty-link')) {
+                totalClicks++;
+                updateStats();
+                log(`Pretty link clicked: ${e.target.href}`, 'SUCCESS');
+                log(`→ Would redirect through /l/ rewrite rule`, 'INFO');
+            }
+        });
+
+        // Log page ready
+        document.addEventListener('DOMContentLoaded', function() {
+            log('Test page ready - all tracking elements loaded', 'SUCCESS');
+            log('LeadStream phone tracking should be active', 'INFO');
+        });
+    </script>
+</body>
+</html>

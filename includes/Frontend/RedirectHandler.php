@@ -57,9 +57,9 @@ class RedirectHandler {
 
     // Fetch link record
     $table = $wpdb->prefix . 'ls_links';
-    $link  = $wpdb->get_row(
+  $link  = $wpdb->get_row(
       $wpdb->prepare(
-        "SELECT id, target_url FROM {$table} WHERE slug = %s LIMIT 1",
+    "SELECT id, target_url, COALESCE(redirect_type, '301') as redirect_type FROM {$table} WHERE slug = %s LIMIT 1",
         $slug
       )
     );
@@ -81,8 +81,9 @@ class RedirectHandler {
       [ '%d', '%s', '%s' ]
     );
 
-    // Perform a 301 redirect to the target URL
-    wp_redirect( $link->target_url, 301 );
+  // Perform redirect honoring configured type
+  $code = in_array($link->redirect_type, ['301','302','307','308'], true) ? intval($link->redirect_type) : 301;
+  wp_redirect( $link->target_url, $code );
     exit;
   }
 }
