@@ -19,6 +19,8 @@ if (is_admin()) {
     require_once plugin_dir_path(__FILE__) . 'includes/Admin/Assets.php';
     require_once plugin_dir_path(__FILE__) . 'includes/Admin/Settings.php';
     require_once plugin_dir_path(__FILE__) . 'includes/Admin/LinksDashboard.php';
+    require_once plugin_dir_path(__FILE__) . 'includes/Repository/LinksRepository.php';
+    require_once plugin_dir_path(__FILE__) . 'includes/Export/Exporters.php';
     require_once plugin_dir_path(__FILE__) . 'includes/AJAX/UTMHandler.php';
     require_once plugin_dir_path(__FILE__) . 'includes/AJAX/PhoneHandler.php';
     \LS\Admin\Assets::init();

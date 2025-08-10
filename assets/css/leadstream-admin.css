@@ -335,6 +335,18 @@
    PHONE TRACKING STYLES
    ============================================== */
 
+/* Lightweight accordion */
+.ls-acc-toggle { margin: 4px 4px 4px 0; }
+.ls-acc-panel { margin: 8px 0 14px 0; }
+
+/* Phone tab: add breathing room for button rows */
+.leadstream-phone-tracking .ls-btn-row .button { margin: 0 4px 4px 0; }
+.leadstream-phone-tracking .ls-acc-toggle.button { margin: 0 4px 4px 0; }
+
+/* Simple responsive video */
+.ls-video-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border: 1px solid #dcdcde; border-radius: 6px; background:#000; }
+.ls-video-wrapper iframe, .ls-video-wrapper video { position: absolute; top:0; left:0; width:100%; height:100%; }
+
 /* Phone tracking form styles */
 .leadstream-phone-tracking .form-table th {
     width: 200px;
@@ -481,4 +493,50 @@
     .leadstream-phone-tracking .form-table th {
         border-bottom: none;
     }
+}
+
+/* ==============================================
+   PRETTY LINKS LIST TABLE - PAGINATION STYLES
+   ============================================== */
+.ls-links-table .tablenav .tablenav-pages {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ls-links-table .tablenav .tablenav-pages .pagination-links a,
+.ls-links-table .tablenav .tablenav-pages .pagination-links span.current {
+  border: 1px solid #c3c4c7;
+  background: #fff;
+  color: #1d2327;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-decoration: none;
+}
+.ls-links-table .tablenav .tablenav-pages .pagination-links a:hover {
+  background: #f0f6fc;
+  border-color: #8c8f94;
+}
+.ls-links-table .tablenav .tablenav-pages .pagination-links .tablenav-pages-navspan,
+.ls-links-table .tablenav .tablenav-pages .pagination-links a.first-page,
+.ls-links-table .tablenav .tablenav-pages .pagination-links a.prev-page,
+.ls-links-table .tablenav .tablenav-pages .pagination-links a.next-page,
+.ls-links-table .tablenav .tablenav-pages .pagination-links a.last-page {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+}
+.ls-links-table .tablenav .tablenav-pages .pagination-links a.first-page::before { content: "⏮"; }
+.ls-links-table .tablenav .tablenav-pages .pagination-links a.prev-page::before  { content: "◀"; }
+.ls-links-table .tablenav .tablenav-pages .pagination-links a.next-page::before  { content: "▶"; }
+.ls-links-table .tablenav .tablenav-pages .pagination-links a.last-page::before  { content: "⏭"; }
+.ls-links-table .tablenav .tablenav-pages .displaying-num {
+  color: #646970;
+}
+.ls-links-table .tablenav .actions input[type="date"],
+.ls-links-table .tablenav .actions input[type="text"],
+.ls-links-table .tablenav .actions input[type="number"],
+.ls-links-table .tablenav .actions select {
+  height: 28px;
 }

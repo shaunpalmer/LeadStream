@@ -28,6 +28,7 @@ class Settings {
         // AJAX handlers
         add_action('wp_ajax_check_slug_availability', [__CLASS__, 'ajax_check_slug_availability']);
     add_action('wp_ajax_ls_generate_short_slug', [__CLASS__, 'ajax_generate_short_slug']);
+    add_action('wp_ajax_ls_phone_table', [__CLASS__, 'ajax_phone_table']);
     }
     
     /**
@@ -253,21 +254,56 @@ class Settings {
                         default:
                             // Show admin notices for Pretty Links
                             self::show_pretty_links_notices();
-                            
-                            // Show quick stats
+
+                            // Capture Stats and Helper content so we can wrap in accordions conditionally
+                            ob_start();
                             self::show_pretty_links_stats();
-                            
-                            // Show quick access helper
+                            $stats_html = trim(ob_get_clean());
+
+                            ob_start();
                             self::render_pretty_links_helper();
-                            
-                            // Instantiate and render our List Table
+                            $helper_html = trim(ob_get_clean());
+
+                            // Quick jump links + Add New
+                            echo '<div class="ls-btn-row" style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin: 6px 0 10px 0;">';
+                            echo '  <nav style="display:flex; gap:6px;">';
+                            if ($stats_html !== '') {
+                                echo '    <a href="#ls-pl-stats" class="button">Stats</a>';
+                            }
+                            if ($helper_html !== '') {
+                                echo '    <a href="#ls-pl-helper" class="button">Quick Access</a>';
+                            }
+                            echo '    <a href="#ls-pl-table" class="button button-primary">All Links</a>';
+                            echo '  </nav>';
+                            echo '  <a href="' . esc_url(admin_url('admin.php?page=leadstream-analytics-injector&tab=links&action=add')) . '" class="button button-primary" style="margin-left:auto;">+ Add New</a>';
+                            echo '</div>';
+
+                            // Stats panel (optional)
+                            if ($stats_html !== '') {
+                                echo '<button type="button" class="button button-secondary button-small ls-acc-toggle" data-acc="ls-pl-stats" aria-controls="ls-pl-stats" aria-expanded="true">📊 Link Stats Summary</button>';
+                                echo '<div id="ls-pl-stats" class="ls-acc-panel" style="margin-top:10px;">' . $stats_html . '</div>';
+                            }
+
+                            // Helper panel (optional)
+                            if ($helper_html !== '') {
+                                echo '<button type="button" class="button button-secondary button-small ls-acc-toggle" data-acc="ls-pl-helper" aria-controls="ls-pl-helper" aria-expanded="true">🧰 Quick Access Helper</button>';
+                                echo '<div id="ls-pl-helper" class="ls-acc-panel" style="margin-top:10px;">' . $helper_html . '</div>';
+                            }
+
+                            // Instantiate and render our List Table inside a collapsible panel
                             $table = new \LS\Admin\LinksDashboard();
                             $table->prepare_items();
-                            echo '<div class="wrap">';
-                            echo '<h1 class="wp-heading-inline">Pretty Links Dashboard</h1>';
-                            echo '<a href="' . admin_url('admin.php?page=leadstream-analytics-injector&tab=links&action=add') . '" class="page-title-action">Add New</a>';
-                            echo '<hr class="wp-header-end">';
+                            echo '<button type="button" class="button button-secondary button-small ls-acc-toggle" data-acc="ls-pl-table" aria-controls="ls-pl-table" aria-expanded="true">📋 All Pretty Links</button>';
+                            echo '<div id="ls-pl-table" class="ls-acc-panel" style="margin-top:10px;">';
+                            echo '  <div class="wrap">';
+                            echo '    <h1 class="wp-heading-inline">Pretty Links Dashboard</h1>';
+                            echo '    <a href="' . esc_url(admin_url('admin.php?page=leadstream-analytics-injector&tab=links&action=add')) . '" class="page-title-action">Add New</a>';
+                            echo '    <hr class="wp-header-end">';
+                            echo '    <div class="ls-links-table">';
                             $table->display();
+                            echo '    </div>';
+                            echo '  </div>';
+                            echo '</div>';
                             
                             // FAQ Accordion for Pretty Links
                             ?>
@@ -1232,6 +1268,10 @@ document.addEventListener('wpformsSubmit', function (event) {
             // Save enable/disable setting
             $phone_enabled = isset($_POST['leadstream_phone_enabled']) ? 1 : 0;
             update_option('leadstream_phone_enabled', $phone_enabled);
+
+            // Save optional recording URL
+            $recording_url = isset($_POST['leadstream_phone_recording_url']) ? esc_url_raw(trim($_POST['leadstream_phone_recording_url'])) : '';
+            update_option('leadstream_phone_recording_url', $recording_url);
             
             // Show success message with normalization feedback
             $normalized_count = count($phone_numbers);
@@ -1246,9 +1286,10 @@ document.addEventListener('wpformsSubmit', function (event) {
         }
         
         // Get current settings
-        $phone_numbers = get_option('leadstream_phone_numbers', array());
-        $css_selectors = get_option('leadstream_phone_selectors', '');
-        $phone_enabled = get_option('leadstream_phone_enabled', 1);
+    $phone_numbers = get_option('leadstream_phone_numbers', array());
+    $css_selectors = get_option('leadstream_phone_selectors', '');
+    $phone_enabled = get_option('leadstream_phone_enabled', 1);
+    $recording_url = get_option('leadstream_phone_recording_url', '');
         
         // Get phone click stats with proper wpdb->prepare() usage
         global $wpdb;
@@ -1423,6 +1464,18 @@ document.addEventListener('wpformsSubmit', function (event) {
                                 </p>
                             </td>
                         </tr>
+
+                        <tr>
+                            <th scope="row">
+                                <label for="leadstream_phone_recording_url">Recording URL <em>(Optional)</em></label>
+                            </th>
+                            <td>
+                                <input type="url" id="leadstream_phone_recording_url" name="leadstream_phone_recording_url" value="<?php echo esc_attr($recording_url); ?>" class="regular-text" placeholder="https://youtu.be/... or https://example.com/demo.mp4" />
+                                <p class="description">
+                                    Paste a link to a short screen recording explaining how Phone Tracking works. YouTube, Vimeo, or direct MP4 supported.
+                                </p>
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
                 
@@ -1434,9 +1487,52 @@ document.addEventListener('wpformsSubmit', function (event) {
             </form>
             
             <!-- How It Works Section -->
-            <div style="margin-top: 30px; background: #f9f9f9; padding: 20px; border-radius: 6px; border-left: 4px solid #72aee6;">
-                <h3 style="margin-top: 0; color: #1d2327;">🔧 How Phone Tracking Works</h3>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+            <button type="button" class="button button-secondary button-small ls-acc-toggle" data-acc="ls-how-it-works" aria-controls="ls-how-it-works" aria-expanded="true">🔧 How Phone Tracking Works</button>
+            <div id="ls-how-it-works" class="ls-acc-panel" style="margin-top: 10px; background: #f9f9f9; padding: 20px; border-radius: 6px; border-left: 4px solid #72aee6;">
+                <h3 class="screen-reader-text">🔧 How Phone Tracking Works</h3>
+
+                <?php if (!empty($recording_url)):
+                    $embed_html = '';
+                    $url = esc_url($recording_url);
+                    $host = wp_parse_url($recording_url, PHP_URL_HOST);
+                    if (is_string($host)) { $host = strtolower($host); }
+                    // YouTube
+                    if ($host && (strpos($host, 'youtube.com') !== false || strpos($host, 'youtu.be') !== false)) {
+                        $vid = '';
+                        if (strpos($host, 'youtu.be') !== false) {
+                            // https://youtu.be/VIDEOID
+                            $path = trim((string) wp_parse_url($recording_url, PHP_URL_PATH), '/');
+                            $vid = $path;
+                        } else {
+                            // https://www.youtube.com/watch?v=VIDEOID
+                            parse_str((string) wp_parse_url($recording_url, PHP_URL_QUERY), $qs);
+                            $vid = isset($qs['v']) ? $qs['v'] : '';
+                        }
+                        if ($vid) {
+                            $embed_html = '<div class="ls-video-wrapper"><iframe width="560" height="315" src="https://www.youtube.com/embed/' . esc_attr($vid) . '" title="How Phone Tracking Works" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture;" allowfullscreen></iframe></div>';
+                        }
+                    }
+                    // Vimeo
+                    if (!$embed_html && $host && strpos($host, 'vimeo.com') !== false) {
+                        $path = trim((string) wp_parse_url($recording_url, PHP_URL_PATH), '/');
+                        if ($path) {
+                            $embed_html = '<div class="ls-video-wrapper"><iframe src="https://player.vimeo.com/video/' . esc_attr($path) . '" width="640" height="360" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>';
+                        }
+                    }
+                    // Direct MP4
+                    if (!$embed_html && preg_match('/\.mp4($|\?)/i', $recording_url)) {
+                        $embed_html = '<div class="ls-video-wrapper"><video controls preload="metadata"><source src="' . $url . '" type="video/mp4" />Your browser does not support the video tag.</video></div>';
+                    }
+                    if ($embed_html) {
+                        echo $embed_html; 
+                    } else {
+                        echo '<p style="margin-top:0;">Watch the quick recording: <a class="button" href="' . $url . '" target="_blank" rel="noopener">Open Recording</a></p>';
+                    }
+                else: ?>
+                    <p style="margin-top:0;">Add a short recording URL above to embed a quick walkthrough here.</p>
+                <?php endif; ?>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 16px;">
                     <div>
                         <h4 style="color: #2271b1; margin-bottom: 8px;">📱 Automatic Detection</h4>
                         <ul style="margin: 0; color: #50575e; font-size: 14px; line-height: 1.5;">
@@ -1470,8 +1566,8 @@ document.addEventListener('wpformsSubmit', function (event) {
             </div>
             
             <!-- Quick display controls & jump links -->
-            <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin: 10px 0 0 0;">
-                <nav style="display:flex; gap:8px;">
+            <div class="ls-btn-row" style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin: 10px 0 0 0;">
+                <nav style="display:flex; gap:6px;">
                     <a href="#ls-recent" class="button">Recent</a>
                     <a href="#ls-performance" class="button">Performance</a>
                     <a href="#ls-all-calls" class="button button-primary">All Calls</a>
@@ -1516,8 +1612,9 @@ document.addEventListener('wpformsSubmit', function (event) {
             ));
             
             if (!empty($recent_phone_clicks)): ?>
-            <div id="ls-recent" style="margin-top: 30px;">
-                <h3>📞 Recent Phone Clicks</h3>
+            <button type="button" class="button button-secondary button-small ls-acc-toggle" data-acc="ls-recent" aria-controls="ls-recent" aria-expanded="true">📞 Recent Phone Clicks</button>
+            <div id="ls-recent" class="ls-acc-panel" style="margin-top: 10px;">
+                <h3 class="screen-reader-text">📞 Recent Phone Clicks</h3>
                 <table class="widefat fixed striped">
                     <thead>
                         <tr>
@@ -1586,8 +1683,9 @@ document.addEventListener('wpformsSubmit', function (event) {
                     'phone'
                 ));
             ?>
-            <div id="ls-performance" style="margin-top: 30px;">
-                <h3>📊 Phone Number Performance</h3>
+            <button type="button" class="button button-secondary button-small ls-acc-toggle" data-acc="ls-performance" aria-controls="ls-performance" aria-expanded="true">📊 Phone Number Performance</button>
+            <div id="ls-performance" class="ls-acc-panel" style="margin-top: 10px;">
+                <h3 class="screen-reader-text">📊 Phone Number Performance</h3>
                 <table class="widefat fixed striped">
                     <thead>
                         <tr>
@@ -1715,9 +1813,10 @@ document.addEventListener('wpformsSubmit', function (event) {
                 // Distinct numbers for dropdown
                 $numbers = $wpdb->get_col("SELECT DISTINCT link_key FROM {$table} WHERE link_type = 'phone' ORDER BY link_key ASC");
             ?>
-            <div id="ls-all-calls" style="margin-top: 40px;">
-                <h3>📒 All Phone Calls</h3>
-                <form method="get" style="margin-bottom: 12px; display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:10px; align-items:end;">
+            <button type="button" class="button button-secondary button-small ls-acc-toggle" data-acc="ls-all-calls" aria-controls="ls-all-calls" aria-expanded="true">📒 All Phone Calls</button>
+            <div id="ls-all-calls" class="ls-acc-panel ls-phone-calls" style="margin-top: 10px;">
+                <h3 class="screen-reader-text">📒 All Phone Calls</h3>
+                <form class="js-phone-filters" method="get" style="margin-bottom: 12px; display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:10px; align-items:end;">
                     <input type="hidden" name="page" value="leadstream-analytics-injector" />
                     <input type="hidden" name="tab" value="phone" />
                     <div>
@@ -1758,68 +1857,7 @@ document.addEventListener('wpformsSubmit', function (event) {
 
                 <div style="margin-bottom:8px; color:#646970; font-size:12px;">Showing <?php echo number_format(min($per_page, max(0, $total_count - $offset))); ?> of <?php echo number_format($total_count); ?> result<?php echo $total_count==1?'':'s'; ?>.</div>
 
-                <table class="widefat fixed striped">
-                    <thead>
-                        <tr>
-                            <th width="12%">Date</th>
-                            <th width="10%">Time</th>
-                            <th width="16%">Phone</th>
-                            <th>Page</th>
-                            <th width="14%">Source</th>
-                            <th width="12%">IP</th>
-                            <th width="12%">Referrer</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($all_calls)): ?>
-                            <tr><td colspan="7" style="text-align:center; color:#646970;">No calls found for the selected filters.</td></tr>
-                        <?php else: foreach ($all_calls as $row): ?>
-                        <?php 
-                            $ts = strtotime($row->clicked_at);
-                            $date_str = !empty($row->click_date) ? esc_html(date_i18n('M j, Y', strtotime($row->click_date))) : esc_html(date_i18n('M j, Y', $ts));
-                            $time_str = !empty($row->click_time) ? esc_html(date_i18n('g:i A', strtotime($row->click_time))) : esc_html(date_i18n('g:i A', $ts));
-                            $bits = [];
-                            if (!empty($row->element_type)) $bits[] = $row->element_type;
-                            if (!empty($row->element_id)) $bits[] = '#' . $row->element_id;
-                            if (!empty($row->element_class)) $bits[] = '.' . preg_replace('/\s+/', '.', $row->element_class);
-                            $src = !empty($bits) ? implode(' ', $bits) : 'unknown';
-                            $ref_host = '';
-                            if (!empty($row->referrer)) { $p = wp_parse_url($row->referrer); $ref_host = $p['host'] ?? $row->referrer; }
-                        ?>
-                        <tr>
-                            <td><?php echo $date_str; ?></td>
-                            <td><?php echo $time_str; ?></td>
-                            <td><strong><?php echo esc_html($row->phone_number); ?></strong></td>
-                            <td>
-                                <?php if (!empty($row->page_url)): ?>
-                                    <a href="<?php echo esc_url($row->page_url); ?>" target="_blank" title="<?php echo esc_attr($row->page_title ?: $row->page_url); ?>">
-                                        <?php echo esc_html($row->page_title ?: $row->page_url); ?>
-                                    </a>
-                                <?php else: ?>
-                                    <span style="color:#646970;">(no page)</span>
-                                <?php endif; ?>
-                            </td>
-                            <td><code><?php echo esc_html($src); ?></code></td>
-                            <td><code><?php echo esc_html($row->ip_address ?: ''); ?></code></td>
-                            <td><?php echo esc_html($ref_host ?: ''); ?></td>
-                        </tr>
-                        <?php endforeach; endif; ?>
-                    </tbody>
-                </table>
-
-                <?php 
-                // Pagination
-                $total_pages = max(1, ceil($total_count / $per_page));
-                if ($total_pages > 1):
-                    echo '<div class="tablenav"><div class="tablenav-pages">';
-                    for ($i=1; $i<=$total_pages; $i++) {
-                        $url = add_query_arg(array_merge($_GET, ['p'=>$i]));
-                        $style = $i==$paged ? 'font-weight:600;' : '';
-                        echo '<a class="page-numbers" style="margin-right:6px; ' . esc_attr($style) . '" href="' . esc_url($url) . '">' . intval($i) . '</a>';
-                    }
-                    echo '</div></div>';
-                endif; 
-                ?>
+                <?php echo self::render_phone_calls_fragment($all_calls, $total_count, $per_page, $paged); ?>
             </div>
             <?php endif; // table_exists ?>
         </div>
@@ -1864,6 +1902,115 @@ document.addEventListener('wpformsSubmit', function (event) {
             </div>
         </div>
         <?php
+    }
+
+    // Reusable fragment renderer for All Phone Calls table and pagination
+    private static function render_phone_calls_fragment($rows, $total_count, $per_page, $paged) {
+        ob_start();
+        $offset = ($paged - 1) * $per_page;
+        ?>
+        <table class="widefat fixed striped">
+            <thead>
+                <tr>
+                    <th width="12%">Date</th>
+                    <th width="10%">Time</th>
+                    <th width="16%">Phone</th>
+                    <th>Page</th>
+                    <th width="14%">Source</th>
+                    <th width="12%">IP</th>
+                    <th width="12%">Referrer</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($rows)): ?>
+                    <tr><td colspan="7" style="text-align:center; color:#646970;">No calls found for the selected filters.</td></tr>
+                <?php else: foreach ($rows as $row): ?>
+                <?php 
+                    $ts = strtotime($row->clicked_at);
+                    $date_str = !empty($row->click_date) ? esc_html(date_i18n('M j, Y', strtotime($row->click_date))) : esc_html(date_i18n('M j, Y', $ts));
+                    $time_str = !empty($row->click_time) ? esc_html(date_i18n('g:i A', strtotime($row->click_time))) : esc_html(date_i18n('g:i A', $ts));
+                    $bits = [];
+                    if (!empty($row->element_type)) $bits[] = $row->element_type;
+                    if (!empty($row->element_id)) $bits[] = '#' . $row->element_id;
+                    if (!empty($row->element_class)) $bits[] = '.' . preg_replace('/\s+/', '.', $row->element_class);
+                    $src = !empty($bits) ? implode(' ', $bits) : 'unknown';
+                    $ref_host = '';
+                    if (!empty($row->referrer)) { $p = wp_parse_url($row->referrer); $ref_host = $p['host'] ?? $row->referrer; }
+                ?>
+                <tr>
+                    <td><?php echo $date_str; ?></td>
+                    <td><?php echo $time_str; ?></td>
+                    <td><strong><?php echo esc_html($row->phone_number); ?></strong></td>
+                    <td>
+                        <?php if (!empty($row->page_url)): ?>
+                            <a href="<?php echo esc_url($row->page_url); ?>" target="_blank" title="<?php echo esc_attr($row->page_title ?: $row->page_url); ?>">
+                                <?php echo esc_html($row->page_title ?: $row->page_url); ?>
+                            </a>
+                        <?php else: ?>
+                            <span style="color:#646970;">(no page)</span>
+                        <?php endif; ?>
+                    </td>
+                    <td><code><?php echo esc_html($src); ?></code></td>
+                    <td><code><?php echo esc_html($row->ip_address ?: ''); ?></code></td>
+                    <td><?php echo esc_html($ref_host ?: ''); ?></td>
+                </tr>
+                <?php endforeach; endif; ?>
+            </tbody>
+        </table>
+
+        <?php 
+        // Pagination
+        $total_pages = max(1, ceil($total_count / $per_page));
+        if ($total_pages > 1):
+            echo '<div class="tablenav"><div class="tablenav-pages">';
+            for ($i=1; $i<=$total_pages; $i++) {
+                $url = add_query_arg(array_merge($_GET, ['p'=>$i]));
+                $style = $i==$paged ? 'font-weight:600;' : '';
+                echo '<a class="page-numbers js-paginate" data-args=' . esc_attr(wp_json_encode(array_merge($_GET, ['p'=>$i]))) . ' style="margin-right:6px; ' . esc_attr($style) . '" href="' . esc_url($url) . '">' . intval($i) . '</a>';
+            }
+            echo '</div></div>';
+        endif; 
+        ?>
+        <?php
+        return ob_get_clean();
+    }
+
+    // AJAX: return All Phone Calls fragment
+    public static function ajax_phone_table() {
+        if (!current_user_can('manage_options')) { wp_send_json_error(['message'=>'forbidden'], 403); }
+        check_ajax_referer('ls-admin','nonce');
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'ls_clicks';
+        $from_date = isset($_REQUEST['from']) ? sanitize_text_field(wp_unslash($_REQUEST['from'])) : '';
+        $to_date = isset($_REQUEST['to']) ? sanitize_text_field(wp_unslash($_REQUEST['to'])) : '';
+        $phone_filter = isset($_REQUEST['phone']) ? sanitize_text_field(wp_unslash($_REQUEST['phone'])) : '';
+        $page_q = isset($_REQUEST['q']) ? sanitize_text_field(wp_unslash($_REQUEST['q'])) : '';
+        $elem_q = isset($_REQUEST['elem']) ? sanitize_text_field(wp_unslash($_REQUEST['elem'])) : '';
+        $per_page = isset($_REQUEST['pp']) ? max(10, min(200, intval($_REQUEST['pp']))) : 25;
+        $paged = isset($_REQUEST['p']) ? max(1, intval($_REQUEST['p'])) : 1;
+
+        $where = ["link_type = %s"]; $params = ['phone'];
+        if ($phone_filter !== '') { $where[] = "link_key = %s"; $params[] = $phone_filter; }
+        if ($from_date !== '') { $where[] = "clicked_at >= %s"; $params[] = $from_date . ' 00:00:00'; }
+        if ($to_date !== '') { $where[] = "clicked_at <= %s"; $params[] = $to_date . ' 23:59:59'; }
+        if ($page_q !== '') { $like = '%' . $wpdb->esc_like($page_q) . '%'; $where[] = "(page_title LIKE %s OR page_url LIKE %s)"; $params[] = $like; $params[] = $like; }
+        if ($elem_q !== '') { $elike = '%' . $wpdb->esc_like($elem_q) . '%'; $where[] = "(element_type LIKE %s OR element_id LIKE %s OR element_class LIKE %s)"; $params[] = $elike; $params[] = $elike; $params[] = $elike; }
+        $where_sql = implode(' AND ', $where);
+
+        $count_sql = "SELECT COUNT(*) FROM {$table} WHERE {$where_sql}";
+        $total_count = (int) $wpdb->get_var($wpdb->prepare($count_sql, $params));
+        $offset = ($paged - 1) * $per_page;
+
+        $data_sql = "SELECT link_key as phone_number, clicked_at, click_date, click_time, page_title, page_url, element_type, element_id, element_class, ip_address, referrer FROM {$table} WHERE {$where_sql} ORDER BY clicked_at DESC LIMIT %d OFFSET %d";
+        $data_params = array_merge($params, [$per_page, $offset]);
+        $rows = $wpdb->get_results($wpdb->prepare($data_sql, $data_params));
+
+        $html = self::render_phone_calls_fragment($rows, $total_count, $per_page, $paged);
+        $url = add_query_arg(array_merge([
+            'page' => 'leadstream-analytics-injector', 'tab' => 'phone'
+        ], array_intersect_key($_REQUEST, array_flip(['from','to','phone','q','elem','pp','p']))), admin_url('admin.php'));
+        wp_send_json_success(['html'=>$html, 'url'=>$url]);
     }
 
     /**

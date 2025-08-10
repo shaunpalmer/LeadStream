@@ -16,6 +16,7 @@ class Assets {
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_admin_scripts']);
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_utm_builder']);
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_pretty_links']);
+    add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_ls_admin']);
         
         // Frontend phone tracking
         add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_phone_tracking']);
@@ -178,7 +179,7 @@ JS;
             'leadstream-admin-css',
             plugin_dir_url(dirname(dirname(__FILE__))) . 'assets/css/leadstream-admin.css',
             ['wp-admin'],
-            '2.5.5'
+            '2.5.6'
         );
         
         // Add CodeMirror styling that works with both WP and CDN versions
@@ -204,6 +205,97 @@ JS;
         }
         ';
         wp_add_inline_style('leadstream-admin-css', $codemirror_css);
+    }
+
+    /** Enqueue small admin-enhancement script and sticky styles on our pages */
+    public static function enqueue_ls_admin($hook) {
+        if ('toplevel_page_leadstream-analytics-injector' !== $hook) {
+            return;
+        }
+        // JS
+        wp_enqueue_script(
+            'leadstream-admin-lite',
+            plugin_dir_url(dirname(dirname(__FILE__))) . 'assets/js/ls-admin.js',
+            ['jquery'],
+            '1.0.0',
+            true
+        );
+        wp_localize_script('leadstream-admin-lite', 'LSAjax', [
+            'ajaxurl' => admin_url('admin-ajax.php'),
+            'nonce'   => wp_create_nonce('ls-admin')
+        ]);
+
+                // Datepicker: Flatpickr (reliable, small). Applies to inputs on Pretty Links & Phone filters
+                wp_enqueue_style(
+                        'flatpickr-css',
+                        'https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css',
+                        [],
+                        '4.6.13'
+                );
+                wp_enqueue_script(
+                        'flatpickr-js',
+                        'https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js',
+                        [],
+                        '4.6.13',
+                        true
+                );
+                $initFlatpickr = <<<'JS'
+document.addEventListener('DOMContentLoaded', function () {
+    function initLSDatepickers(root) {
+        if (!window.flatpickr) return;
+        var sel = [
+            '#ls_from',
+            '#ls_to',
+            'form#ls-links-filters input[name="from"]',
+            'form#ls-links-filters input[name="to"]'
+        ].join(',');
+        var scope = root || document;
+        scope.querySelectorAll(sel).forEach(function (el) {
+            try {
+                if (el._flatpickr) { el._flatpickr.destroy(); }
+                flatpickr(el, {
+                    allowInput: true,
+                    dateFormat: 'Y-m-d',   // submitted format
+                    altInput: true,
+                    altFormat: 'd/m/Y',    // displayed format
+                    disableMobile: true
+                });
+                if (el._flatpickr && el._flatpickr.altInput) {
+                    el._flatpickr.altInput.setAttribute('placeholder', 'dd/mm/yyyy');
+                } else {
+                    el.setAttribute('placeholder', 'dd/mm/yyyy');
+                }
+            } catch (e) {}
+        });
+    }
+    // Initial
+    initLSDatepickers(document);
+    // Re-init after our AJAX table swaps
+    document.addEventListener('ls:links:loaded', function (e) {
+        initLSDatepickers(e.detail && e.detail.root ? e.detail.root : document);
+    });
+        document.addEventListener('ls:phone:loaded', function (e) {
+            initLSDatepickers(e.detail && e.detail.root ? e.detail.root : document);
+        });
+});
+JS;
+                wp_add_inline_script('flatpickr-js', $initFlatpickr);
+        // Inline CSS: sticky tabs/header and loading shimmer
+    $css = '
+    /* Sticky table headers */
+    .ls-links-table .wp-list-table thead th { position: sticky; top: 64px; background: #fff; z-index: 5; }
+    body.admin-bar .ls-links-table .wp-list-table thead th { top: 96px; }
+    /* Loading shimmer */
+    .ls-links-table.is-loading, .ls-phone-calls.is-loading { position: relative; }
+    .ls-links-table.is-loading::after, .ls-phone-calls.is-loading::after {
+            content: ""; position: absolute; left:0; right:0; top:0; height:3px;
+            background: linear-gradient(90deg, rgba(0,115,170,0) 0%, rgba(0,115,170,.5) 50%, rgba(0,115,170,0) 100%);
+            animation: ls-shimmer 1s linear infinite;
+        }
+        @keyframes ls-shimmer { 0% { transform: translateX(-100%);} 100% { transform: translateX(100%);} }
+        .ls-toast { position: fixed; bottom: 24px; right: 24px; background:#1d2327; color:#fff; padding:8px 12px; border-radius:4px; box-shadow:0 2px 10px rgba(0,0,0,.2); z-index:9999; }
+        ';
+        wp_add_inline_style('leadstream-admin-css', $css);
     }
     
     /**

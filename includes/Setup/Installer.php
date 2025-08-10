@@ -195,6 +195,19 @@ class Installer {
             }
         }
 
+        // Backfill any NULL/empty redirect_type values to '301'
+        $wpdb->query("UPDATE {$links_table} SET redirect_type = '301' WHERE redirect_type IS NULL OR redirect_type = ''");
+
+        // Add indexes for faster filters if not present
+        $rt_idx = $wpdb->get_var("SHOW INDEX FROM {$links_table} WHERE Key_name = 'redirect_type_idx'");
+        if (!$rt_idx) {
+            $wpdb->query("ALTER TABLE {$links_table} ADD INDEX redirect_type_idx (redirect_type)");
+        }
+        $created_idx = $wpdb->get_var("SHOW INDEX FROM {$links_table} WHERE Key_name = 'created_at_idx'");
+        if (!$created_idx) {
+            $wpdb->query("ALTER TABLE {$links_table} ADD INDEX created_at_idx (created_at)");
+        }
+
         if (defined('WP_DEBUG') && WP_DEBUG) {
             error_log('LeadStream: Migration completed successfully');
         }
