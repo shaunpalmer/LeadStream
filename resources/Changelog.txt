@@ -1,4 +1,17 @@
 Changelog
+## 2.11.0 - ADMIN DATEPICKER + PRETTY LINKS ACCORDION UX 🎯
+UPGRADES:
+- ADDED: Calendar datepicker (Flatpickr) for From/To filters on Pretty Links and Phone tabs
+- ENHANCED: Auto re-init of datepicker after AJAX table swaps (filters/pagination)
+- ADDED: dd/mm/yyyy placeholders for consistent display format
+- ENHANCED: Pretty Links page now includes collapsible sections (Stats, Quick Access, All Links) matching Phone tab UX
+- ADDED: Quick-jump button row and saved open/closed state via localStorage
+
+DEV NOTES:
+- Flatpickr configured with altInput (d/m/Y) while submitting Y-m-d to PHP
+- Custom DOM events dispatched after AJAX: `ls:links:loaded`, `ls:phone:loaded`
+- No breaking changes to filters or endpoints
+
 ## 2.10.0 - PRETTY LINKS DIRECTORY FILTERS + EXPORT ✅
 UPGRADES:
 - ADDED: Filters (From/To created date, Redirect type 301/302/307/308, Search by slug/target URL, Per-page) in Pretty Links list table

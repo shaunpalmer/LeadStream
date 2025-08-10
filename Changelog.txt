@@ -1,3 +1,10 @@
+## 2.11.0 - Admin Datepicker + Pretty Links Accordion UX
+- ADDED: Calendar datepicker (Flatpickr) for all From/To filters on Pretty Links and Phone tabs
+- ENHANCED: Re-initializes datepicker after AJAX table updates for seamless filtering
+- ADDED: dd/mm/yyyy placeholders for consistent visual format
+- ENHANCED: Pretty Links tab now matches Phone tab with collapsible sections (Stats, Quick Access, All Links)
+- POLISH: Quick-jump button row and saved accordion state for smoother navigation
+
 ## 2.10.0 - Pretty Links Filters + CSV Export
 - Filters in Pretty Links table: From/To, Redirect type, Search, Per-page
 - CSV export of current view (secure admin-post with nonce)
