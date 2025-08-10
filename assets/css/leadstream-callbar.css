@@ -1,0 +1,8 @@
+.ls-callbar{position:fixed;left:0;right:0;z-index:99999;background:#1d2327;color:#fff;box-shadow:0 -2px 12px rgba(0,0,0,.25);display:flex;justify-content:center}
+.ls-callbar--top{top:0;box-shadow:0 2px 12px rgba(0,0,0,.25)}
+.ls-callbar--bottom{bottom:0}
+.ls-callbar__btn{display:flex;gap:10px;align-items:center;justify-content:center;padding:12px 16px;color:#fff;text-decoration:none;font-weight:600;width:100%}
+.ls-callbar__btn:hover{background:#000}
+.ls-callbar__cta{font-size:16px}
+.ls-callbar__num{font-family:monospace;background:rgba(255,255,255,.1);padding:2px 6px;border-radius:4px}
+@media(min-width:783px){.ls-callbar{display:none}}

@@ -115,13 +115,27 @@ class LinksDashboard extends \WP_List_Table {
     public function column_default($item, $column_name) {
         switch ($column_name) {
             case 'slug':
-                $short_url = home_url("/l/{$item->slug}");
-                $copy = esc_attr($short_url);
+                $pretty_url = home_url("/l/{$item->slug}");
+                // Deterministic auto shortener: /s/{base62(id)}
+                $code = \LS\Utils::base62_encode($item->id);
+                $shortener_url = home_url("/s/{$code}");
                 return sprintf(
-                    '<strong>%s</strong><br><small>%s</small> <button type="button" class="button button-small ls-copy-btn" data-copy="%s" aria-label="Copy short URL">Copy</button>',
+                    '<strong>%s</strong><br>' .
+                    '<small>%s</small> <button type="button" class="button button-small ls-copy-btn" data-copy="%s" aria-label="Copy pretty link">Copy</button><br>' .
+                    '<small title="Auto-generated shortener">%s</small> ' .
+                    '<button type="button" class="button button-small ls-copy-btn" data-copy="%s" aria-label="Copy shortener">Copy</button> ' .
+                    '<button type="button" class="button button-small ls-qr-btn" data-url="%s" data-filename="%s.png" aria-label="Show QR code" title="Show QR" style="padding:2px 4px; line-height:0;">'
+                    .'<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">'
+                    .'<rect x="2" y="2" width="6" height="6" fill="#1d2327"/><rect x="12" y="2" width="6" height="6" fill="#1d2327"/>'
+                    .'<rect x="2" y="12" width="6" height="6" fill="#1d2327"/>'
+                    .'<rect x="10" y="10" width="2" height="2" fill="#1d2327"/><rect x="14" y="10" width="4" height="2" fill="#1d2327"/>'
+                    .'<rect x="10" y="14" width="2" height="4" fill="#1d2327"/><rect x="14" y="14" width="2" height="2" fill="#1d2327"/><rect x="16" y="16" width="2" height="2" fill="#1d2327"/>'
+                    .'</svg>'
+                    .'</button>',
                     esc_html($item->slug),
-                    esc_html($short_url),
-                    $copy
+                    esc_html($pretty_url), esc_attr($pretty_url),
+                    esc_html($shortener_url), esc_attr($shortener_url),
+                    esc_attr($shortener_url), esc_attr($item->slug)
                 );
             
             case 'target_url':

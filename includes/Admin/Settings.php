@@ -29,6 +29,30 @@ class Settings {
         add_action('wp_ajax_check_slug_availability', [__CLASS__, 'ajax_check_slug_availability']);
     add_action('wp_ajax_ls_generate_short_slug', [__CLASS__, 'ajax_generate_short_slug']);
     add_action('wp_ajax_ls_phone_table', [__CLASS__, 'ajax_phone_table']);
+    add_action('wp_ajax_ls_calls_table', [__CLASS__, 'ajax_calls_table']);
+    // Utility: soft-confirm counts for range deletions
+    add_action('wp_ajax_ls_count_range', [__CLASS__, 'ajax_count_range']);
+    }
+
+    /**
+     * AJAX: Count rows for range delete soft-confirm
+     */
+    public static function ajax_count_range() {
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'forbidden'], 403);
+        }
+        check_ajax_referer('ls-admin', 'nonce');
+        $kind = isset($_POST['kind']) ? sanitize_text_field($_POST['kind']) : '';
+        $from = isset($_POST['from']) ? sanitize_text_field($_POST['from']) : '';
+        $to   = isset($_POST['to'])   ? sanitize_text_field($_POST['to'])   : '';
+        if (!$kind || !$from || !$to) {
+            wp_send_json_error(['message' => 'missing params'], 400);
+        }
+        global $wpdb; $table = $wpdb->prefix . 'ls_clicks';
+        $lt = ($kind === 'link') ? 'link' : 'phone';
+        $sql = "SELECT COUNT(*) FROM {$table} WHERE link_type = %s AND clicked_at BETWEEN %s AND %s";
+        $count = (int) $wpdb->get_var($wpdb->prepare($sql, $lt, $from . ' 00:00:00', $to . ' 23:59:59'));
+        wp_send_json_success(['count' => $count]);
     }
     
     /**
@@ -129,6 +153,11 @@ class Settings {
         register_setting('lead-tracking-js-settings-group', 'leadstream_gtm_id', array(
             'sanitize_callback' => 'sanitize_text_field'
         ));
+        // Stub setting: LS badge toggle (grayed out on free; auto-hidden on paid)
+        register_setting('lead-tracking-js-settings-group', 'leadstream_enable_badge', array(
+            'type'    => 'integer',
+            'default' => 1,
+        ));
         
         // Phone tracking settings - handled via custom form processing
         // register_setting('leadstream_phone_settings_group', 'leadstream_phone_numbers', array(
@@ -165,6 +194,23 @@ class Settings {
             'lead-tracking-js-settings-group',
             'lead-tracking-js-settings-section'
         );
+
+        // Badge toggle (UI stub): disabled until paid flag present
+        add_settings_field(
+            'leadstream_badge_toggle_field',
+            'Tiny LS badge (free installs)',
+            [__CLASS__, 'badge_toggle_field_callback'],
+            'lead-tracking-js-settings-group',
+            'lead-tracking-js-settings-section'
+        );
+    }
+
+    /** Determine if paid version flags are present (stubs). */
+    private static function is_paid() {
+        if (defined('LEADSTREAM_PRO') && LEADSTREAM_PRO) return true;
+        if (apply_filters('leadstream_is_paid', false)) return true;
+        if ((bool) get_option('leadstream_paid_stub', false)) return true;
+        return false;
     }
     
     /**
@@ -181,6 +227,22 @@ class Settings {
             echo '<div class="notice notice-info is-dismissible"><p>Google Tag Manager container loaded (<strong>' . esc_html($gtm_id) . '</strong>). Configure triggers and tags in GTM dashboard.</p></div>';
         }
     }
+
+    /** Render LS badge toggle field (disabled for free tier; auto-enabled when paid). */
+    public static function badge_toggle_field_callback() {
+        $paid = self::is_paid();
+        $val  = (int) get_option('leadstream_enable_badge', 1);
+        $disabled_attr = $paid ? '' : 'disabled="disabled"';
+        $checked = $val ? 'checked' : '';
+        echo '<label><input type="checkbox" name="leadstream_enable_badge" value="1" ' . $checked . ' ' . $disabled_attr . ' /> Show tiny LS badge in footer</label>';
+        echo '<p class="description">';
+        if ($paid) {
+            echo 'You can toggle the badge for paid installs.';
+        } else {
+            echo 'This option is managed automatically for free installs and will be unlockable on paid builds.';
+        }
+        echo '</p>';
+    }
     
     /**
      * Display settings page content
@@ -192,11 +254,112 @@ class Settings {
         
         // Handle form submissions FIRST (before any output)
         $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'javascript';
+
+        // Handle Pretty Links Danger Zone exports (GET) before any output
+        if ($current_tab === 'links' && isset($_GET['dz_export']) && in_array($_GET['dz_export'], ['link_clicks','links'], true)) {
+            if (!current_user_can('manage_options')) { wp_die('Forbidden'); }
+            $nonce = isset($_GET['ls_dz_export']) ? sanitize_text_field(wp_unslash($_GET['ls_dz_export'])) : '';
+            if (!wp_verify_nonce($nonce, 'ls_dz_export')) { wp_die('Invalid nonce'); }
+            global $wpdb;
+            $what = sanitize_text_field($_GET['dz_export']);
+            $dz_from = isset($_GET['dz_from']) ? sanitize_text_field($_GET['dz_from']) : '';
+            $dz_to   = isset($_GET['dz_to'])   ? sanitize_text_field($_GET['dz_to'])   : '';
+            $fmt     = isset($_GET['fmt']) ? sanitize_text_field($_GET['fmt']) : 'csv';
+            $excel   = isset($_GET['excel']) && $_GET['excel'] == '1';
+            if (function_exists('ob_get_level')) { while (ob_get_level()) { ob_end_clean(); } }
+            if ($what === 'link_clicks') {
+                $table = $wpdb->prefix . 'ls_clicks';
+                $cond = ["link_type = %s"]; $par = ['link'];
+                if ($dz_from) { $cond[] = 'clicked_at >= %s'; $par[] = $dz_from . ' 00:00:00'; }
+                if ($dz_to)   { $cond[] = 'clicked_at <= %s'; $par[] = $dz_to   . ' 23:59:59'; }
+                $where_sql = implode(' AND ', $cond);
+                if ($fmt === 'json') {
+                    header('Content-Type: application/json; charset=utf-8');
+                    header('Content-Disposition: attachment; filename=leadstream-pretty-link-clicks-backup.json');
+                    echo '[';
+                    $offset = 0; $limit = 2000; $first = true; do {
+                        $sql = "SELECT * FROM {$table} WHERE {$where_sql} ORDER BY id ASC LIMIT %d OFFSET %d";
+                        $rows = $wpdb->get_results($wpdb->prepare($sql, array_merge($par, [$limit, $offset])), ARRAY_A);
+                        if (!$rows) break;
+                        foreach ($rows as $r) { if (!$first) echo ','; $first = false; echo wp_json_encode($r); }
+                        $offset += $limit; if (function_exists('flush')) { flush(); }
+                    } while (count($rows) === $limit);
+                    echo ']'; exit;
+                } else {
+                    header('Content-Type: text/csv; charset=utf-8');
+                    header('Content-Disposition: attachment; filename=leadstream-pretty-link-clicks-backup.csv');
+                    $out = fopen('php://output', 'w');
+                    if ($excel) { echo "\xEF\xBB\xBF"; } // BOM for Excel on Windows
+                    $offset = 0; $limit = 5000; $wroteHeader = false; do {
+                        $sql = "SELECT * FROM {$table} WHERE {$where_sql} ORDER BY id ASC LIMIT %d OFFSET %d";
+                        $rows = $wpdb->get_results($wpdb->prepare($sql, array_merge($par, [$limit, $offset])), ARRAY_A);
+                        if (!$rows) break; if (!$wroteHeader) { fputcsv($out, array_keys($rows[0])); $wroteHeader = true; }
+                        foreach ($rows as $r) { fputcsv($out, $r); }
+                        $offset += $limit; if (function_exists('flush')) { flush(); }
+                    } while (count($rows) === $limit);
+                    fclose($out); exit;
+                }
+            } elseif ($what === 'links') {
+                $table = $wpdb->prefix . 'ls_links';
+                $cond = ['1=1']; $par = [];
+                if ($dz_from) { $cond[] = 'created_at >= %s'; $par[] = $dz_from . ' 00:00:00'; }
+                if ($dz_to)   { $cond[] = 'created_at <= %s'; $par[] = $dz_to   . ' 23:59:59'; }
+                $where_sql = implode(' AND ', $cond);
+                if ($fmt === 'json') {
+                    header('Content-Type: application/json; charset=utf-8');
+                    header('Content-Disposition: attachment; filename=leadstream-pretty-links-backup.json');
+                    echo '['; $offset = 0; $limit = 2000; $first = true; do {
+                        $sql = "SELECT * FROM {$table} WHERE {$where_sql} ORDER BY id ASC LIMIT %d OFFSET %d";
+                        $rows = $wpdb->get_results($wpdb->prepare($sql, array_merge($par, [$limit, $offset])), ARRAY_A);
+                        if (!$rows) break; foreach ($rows as $r) { if (!$first) echo ','; $first = false; echo wp_json_encode($r); }
+                        $offset += $limit; if (function_exists('flush')) { flush(); }
+                    } while (count($rows) === $limit); echo ']'; exit;
+                } else {
+                    header('Content-Type: text/csv; charset=utf-8');
+                    header('Content-Disposition: attachment; filename=leadstream-pretty-links-backup.csv');
+                    $out = fopen('php://output', 'w');
+                    if ($excel) { echo "\xEF\xBB\xBF"; }
+                    $offset = 0; $limit = 5000; $wroteHeader = false; do {
+                        $sql = "SELECT * FROM {$table} WHERE {$where_sql} ORDER BY id ASC LIMIT %d OFFSET %d";
+                        $rows = $wpdb->get_results($wpdb->prepare($sql, array_merge($par, [$limit, $offset])), ARRAY_A);
+                        if (!$rows) break; if (!$wroteHeader) { fputcsv($out, array_keys($rows[0])); $wroteHeader = true; }
+                        foreach ($rows as $r) { fputcsv($out, $r); }
+                        $offset += $limit; if (function_exists('flush')) { flush(); }
+                    } while (count($rows) === $limit); fclose($out); exit;
+                }
+            }
+        }
         
         // Only process forms on Pretty Links tab and if it's a POST request
         if ($current_tab === 'links' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
-                self::handle_pretty_links_form_submission_early();
+                // Danger Zone: Flushes
+                if (isset($_POST['ls_flush_link_clicks'])) {
+                    check_admin_referer('ls_flush_link_clicks','ls_flush_link_clicks_nonce');
+                    global $wpdb; $wpdb->query("DELETE FROM {$wpdb->prefix}ls_clicks WHERE link_type = 'link'");
+                    add_settings_error('leadstream_links', 'flushed_link_clicks', 'All Pretty Link click rows have been permanently deleted.', 'error');
+                } elseif (isset($_POST['ls_flush_links'])) {
+                    check_admin_referer('ls_flush_links','ls_flush_links_nonce');
+                    global $wpdb; $wpdb->query("TRUNCATE TABLE {$wpdb->prefix}ls_links");
+                    // Also remove link-type clicks for cleanliness
+                    $wpdb->query("DELETE FROM {$wpdb->prefix}ls_clicks WHERE link_type = 'link'");
+                    add_settings_error('leadstream_links', 'flushed_links', 'All Pretty Links and their clicks have been permanently deleted.', 'error');
+                } elseif (isset($_POST['ls_delete_link_clicks_range'])) {
+                    check_admin_referer('ls_delete_link_clicks_range','ls_delete_link_clicks_range_nonce');
+                    $dz_from = isset($_POST['dz_from']) ? sanitize_text_field($_POST['dz_from']) : '';
+                    $dz_to   = isset($_POST['dz_to'])   ? sanitize_text_field($_POST['dz_to'])   : '';
+                    if ($dz_from && $dz_to) {
+                        global $wpdb; $table = $wpdb->prefix . 'ls_clicks';
+                        $sql = "DELETE FROM {$table} WHERE link_type = %s AND clicked_at BETWEEN %s AND %s";
+                        $from = $dz_from . ' 00:00:00'; $to = $dz_to . ' 23:59:59';
+                        $wpdb->query($wpdb->prepare($sql, 'link', $from, $to));
+                        add_settings_error('leadstream_links', 'deleted_range', 'Deleted link clicks in selected date range.', 'error');
+                    } else {
+                        add_settings_error('leadstream_links', 'deleted_range_err', 'Please provide a valid From and To date.', 'error');
+                    }
+                } else {
+                    self::handle_pretty_links_form_submission_early();
+                }
             } catch (Exception $e) {
                 // Log error and show user-friendly message
                 error_log('LeadStream form processing error: ' . $e->getMessage());
@@ -255,6 +418,58 @@ class Settings {
                             // Show admin notices for Pretty Links
                             self::show_pretty_links_notices();
 
+                            // Handle Pretty Links CSV imports (before rendering forms)
+                            if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                                // Import Link Clicks
+                                if (isset($_POST['ls_import_link_clicks'])) {
+                                    check_admin_referer('ls_import_link_clicks', 'ls_import_link_clicks_nonce');
+                                    if (!empty($_FILES['ls_import_file']['tmp_name'])) {
+                                        global $wpdb; $table = $wpdb->prefix . 'ls_clicks'; $truncate = !empty($_POST['ls_import_truncate']);
+                                        if ($truncate) { $wpdb->query($wpdb->prepare("DELETE FROM {$table} WHERE link_type = %s", 'link')); }
+                                        if (($fh = fopen($_FILES['ls_import_file']['tmp_name'], 'r'))) {
+                                            $header = fgetcsv($fh); $count=0; $max=20000; if (is_array($header)) { $header = array_map('trim', $header); }
+                                            $allowed = ['link_id','link_type','link_key','target_url','clicked_at','click_datetime','click_date','click_time','ip_address','user_agent','user_id','referrer','page_url','page_title','element_type','element_class','element_id','meta_data'];
+                                            while (($row = fgetcsv($fh)) !== false && $count < $max) {
+                                                $data = array_combine($header, $row); if (!$data) continue;
+                                                $rec = array_intersect_key($data, array_flip($allowed));
+                                                $rec = array_map('wp_kses_post', $rec);
+                                                $rec['link_type'] = 'link';
+                                                if (empty($rec['clicked_at'])) {
+                                                    $cd = $rec['click_date'] ?? ''; $ct = $rec['click_time'] ?? '';
+                                                    $rec['clicked_at'] = trim($cd . ' ' . $ct) ?: current_time('mysql');
+                                                }
+                                                $wpdb->insert($table, $rec);
+                                                $count++;
+                                            }
+                                            fclose($fh);
+                                            add_settings_error('leadstream_links', 'import_link_clicks_ok', sprintf('Imported %d link click rows.', intval($count)), 'updated');
+                                        }
+                                    }
+                                }
+                                // Import Pretty Links
+                                if (isset($_POST['ls_import_links'])) {
+                                    check_admin_referer('ls_import_links', 'ls_import_links_nonce');
+                                    if (!empty($_FILES['ls_import_file_links']['tmp_name'])) {
+                                        global $wpdb; $table = $wpdb->prefix . 'ls_links'; $truncate = !empty($_POST['ls_import_truncate_links']);
+                                        if ($truncate) { $wpdb->query("TRUNCATE TABLE {$table}"); }
+                                        if (($fh = fopen($_FILES['ls_import_file_links']['tmp_name'], 'r'))) {
+                                            $header = fgetcsv($fh); $count=0; $max=10000; if (is_array($header)) { $header = array_map('trim', $header); }
+                                            $allowed = ['slug','target_url','redirect_type','created_at'];
+                                            while (($row = fgetcsv($fh)) !== false && $count < $max) {
+                                                $data = array_combine($header, $row); if (!$data) continue;
+                                                $rec = array_intersect_key($data, array_flip($allowed));
+                                                $rec = array_map('wp_kses_post', $rec);
+                                                if (empty($rec['redirect_type'])) { $rec['redirect_type'] = '301'; }
+                                                $wpdb->insert($table, $rec);
+                                                $count++;
+                                            }
+                                            fclose($fh);
+                                            add_settings_error('leadstream_links', 'import_links_ok', sprintf('Imported %d pretty links.', intval($count)), 'updated');
+                                        }
+                                    }
+                                }
+                            }
+
                             // Capture Stats and Helper content so we can wrap in accordions conditionally
                             ob_start();
                             self::show_pretty_links_stats();
@@ -305,6 +520,8 @@ class Settings {
                             echo '  </div>';
                             echo '</div>';
                             
+                            // ... (Import card lives near Danger Zone below)
+
                             // FAQ Accordion for Pretty Links
                             ?>
                             <div class="postbox" style="margin-top: 30px;">
@@ -491,7 +708,93 @@ class Settings {
                             </script>
                             <?php
                             
-                            echo '</div>';
+                            // Admin-only: Import cards and Danger Zone for Pretty Links (independent CRUD)
+                            if (current_user_can('manage_options')): ?>
+        
+        <!-- Import: Pretty Links (separate card) -->
+        <div style="margin-top: 18px; padding:16px; border:1px solid #ccd0d4; background:#fff; border-radius:6px;">
+            <h3 style="margin:0 0 6px 0;">Import: Pretty Links</h3>
+            <p style="margin:6px 0 12px 0; color:#50575e;">Upload CSV backups exported from LeadStream. Use the Links form for slugs/targets and the Clicks form for click history.</p>
+            <form method="post" enctype="multipart/form-data" style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:10px;">
+                <?php wp_nonce_field('ls_import_links','ls_import_links_nonce'); ?>
+                <div><label>Pretty Links CSV<br><input type="file" name="ls_import_file_links" accept=".csv" required></label></div>
+                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" name="ls_import_truncate_links" value="1"> Truncate existing pretty links before import</label>
+                <button type="submit" name="ls_import_links" value="1" class="button">Import Pretty Links CSV</button>
+            </form>
+            <form method="post" enctype="multipart/form-data" style="display:flex; gap:10px; align-items:end; flex-wrap:wrap;">
+                <?php wp_nonce_field('ls_import_link_clicks','ls_import_link_clicks_nonce'); ?>
+                <div><label>Link Clicks CSV<br><input type="file" name="ls_import_file" accept=".csv" required></label></div>
+                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" name="ls_import_truncate" value="1"> Truncate existing link clicks before import</label>
+                <button type="submit" name="ls_import_link_clicks" value="1" class="button">Import Link Clicks CSV</button>
+            </form>
+        </div>
+
+        <!-- Danger Zone: Pretty Links -->
+        <details style="margin-top: 18px;" class="ls-acc" id="ls-dz-links">
+            <summary style="padding:12px 16px; border:1px solid #d63638; border-radius:6px; background:#fff5f5; color:#b32d2e; font-weight:600; cursor:pointer;">Danger Zone: Flush Pretty Links Data</summary>
+            <div style="padding:16px; border:1px solid #d63638; border-top:none; background:#fff5f5; border-radius:0 0 6px 6px;">
+            <p style="margin:6px 0 12px 0; color:#8a1f1f;">
+                These actions permanently delete data from your database. Use only to resolve data issues or reduce database size. This cannot be undone.
+            </p>
+            <div style="margin:6px 0 12px 0; display:grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap:8px; align-items:end;">
+                <form method="get" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
+                    <input type="hidden" name="page" value="leadstream-analytics-injector" />
+                    <input type="hidden" name="tab" value="links" />
+                    <input type="hidden" name="dz_export" value="link_clicks" />
+                    <input type="hidden" name="ls_dz_export" value="<?php echo esc_attr(wp_create_nonce('ls_dz_export')); ?>" />
+                    <label>From<br><input type="date" name="dz_from" /></label>
+                    <label>To<br><input type="date" name="dz_to" /></label>
+                    <label style="display:flex; align-items:center; gap:6px;">
+                        <input type="checkbox" name="excel" value="1" /> Open in Excel
+                    </label>
+                    <button class="button button-secondary" type="submit" name="fmt" value="csv">Export Link Clicks CSV</button>
+                    <button class="button" type="submit" name="fmt" value="json">Export Link Clicks JSON</button>
+                </form>
+                <form method="get" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
+                    <input type="hidden" name="page" value="leadstream-analytics-injector" />
+                    <input type="hidden" name="tab" value="links" />
+                    <input type="hidden" name="dz_export" value="links" />
+                    <input type="hidden" name="ls_dz_export" value="<?php echo esc_attr(wp_create_nonce('ls_dz_export')); ?>" />
+                    <label>From<br><input type="date" name="dz_from" /></label>
+                    <label>To<br><input type="date" name="dz_to" /></label>
+                    <label style="display:flex; align-items:center; gap:6px;">
+                        <input type="checkbox" name="excel" value="1" /> Open in Excel
+                    </label>
+                    <button class="button button-secondary" type="submit" name="fmt" value="csv">Export Pretty Links CSV</button>
+                    <button class="button" type="submit" name="fmt" value="json">Export Pretty Links JSON</button>
+                </form>
+                <div style="align-self:center; color:#8a1f1f;">Download filtered backups before deleting.</div>
+            </div>
+
+            <div style="margin:6px 0 12px 0;">
+                <form method="post" onsubmit="return window.LSConfirmRange && LSConfirmRange(this, 'link')" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
+                    <?php wp_nonce_field('ls_delete_link_clicks_range','ls_delete_link_clicks_range_nonce'); ?>
+                    <label>Delete Link Clicks From<br><input type="date" name="dz_from" required /></label>
+                    <label>To<br><input type="date" name="dz_to" required /></label>
+                    <button type="submit" name="ls_delete_link_clicks_range" value="1" class="button" style="background:#f0b429; border-color:#f0b429; color:#1d2327;">Delete Link Clicks in Range</button>
+                </form>
+            </div>
+            <label style="display:flex; align-items:center; gap:8px; margin:8px 0; color:#8a1f1f;">
+                <input type="checkbox" id="ls-confirm-links-flush" />
+                <span>I understand this will permanently remove Pretty Links and/or their click history from the database.</span>
+            </label>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <form method="post" onsubmit="return (document.getElementById('ls-confirm-links-flush')?.checked && confirm('This will permanently delete ALL Pretty Link click rows. Continue?'));">
+                    <?php wp_nonce_field('ls_flush_link_clicks','ls_flush_link_clicks_nonce'); ?>
+                    <button type="submit" name="ls_flush_link_clicks" value="1" class="button" style="background:#d63638; border-color:#d63638; color:#fff;" id="ls-btn-links-flush-clicks" disabled>Delete All Link Clicks</button>
+                </form>
+                <form method="post" onsubmit="return (document.getElementById('ls-confirm-links-flush')?.checked && confirm('This will permanently delete ALL Pretty Links (slugs). Clicks tied to links will be deleted via cascade. Continue?'));">
+                    <?php wp_nonce_field('ls_flush_links','ls_flush_links_nonce'); ?>
+                    <button type="submit" name="ls_flush_links" value="1" class="button" style="background:#8a1f1f; border-color:#8a1f1f; color:#fff;" id="ls-btn-links-flush-links" disabled>Delete All Pretty Links</button>
+                </form>
+            </div>
+            </div>
+        </details>
+
+        <?php endif; // admin only ?>
+        <?php
+                            
+                            echo '</div>'; // close outer wrap for Pretty Links default view
                             break;
                     }
                     break;
@@ -1245,6 +1548,101 @@ document.addEventListener('wpformsSubmit', function (event) {
      * Render Phone Tracking tab
      */
     private static function render_phone_tab() {
+        // Danger Zone export for Phone Clicks with date-range + JSON/CSV
+        if (isset($_GET['dz_export']) && $_GET['dz_export'] === 'phone_clicks') {
+            if (!current_user_can('manage_options')) { wp_die('Forbidden'); }
+            $nonce = isset($_GET['ls_dz_export']) ? sanitize_text_field(wp_unslash($_GET['ls_dz_export'])) : '';
+            if (!wp_verify_nonce($nonce, 'ls_dz_export')) { wp_die('Invalid nonce'); }
+            global $wpdb;
+            $table = $wpdb->prefix . 'ls_clicks';
+            $dz_from = isset($_GET['dz_from']) ? sanitize_text_field($_GET['dz_from']) : '';
+            $dz_to   = isset($_GET['dz_to'])   ? sanitize_text_field($_GET['dz_to'])   : '';
+            $fmt     = isset($_GET['fmt']) ? sanitize_text_field($_GET['fmt']) : 'csv';
+            $excel   = isset($_GET['excel']) && $_GET['excel'] == '1';
+            $cond = ["link_type = %s"]; $par = ['phone'];
+            if ($dz_from) { $cond[] = 'clicked_at >= %s'; $par[] = $dz_from . ' 00:00:00'; }
+            if ($dz_to)   { $cond[] = 'clicked_at <= %s'; $par[] = $dz_to   . ' 23:59:59'; }
+            $where_sql = implode(' AND ', $cond);
+            if (function_exists('ob_get_level')) { while (ob_get_level()) { ob_end_clean(); } }
+            if ($fmt === 'json') {
+                header('Content-Type: application/json; charset=utf-8');
+                header('Content-Disposition: attachment; filename=leadstream-phone-clicks-backup.json');
+                echo '[';
+                $offset = 0; $limit = 2000; $first = true; do {
+                    $sql = "SELECT * FROM {$table} WHERE {$where_sql} ORDER BY id ASC LIMIT %d OFFSET %d";
+                    $rows = $wpdb->get_results($wpdb->prepare($sql, array_merge($par, [$limit, $offset])), ARRAY_A);
+                    if (!$rows) break; foreach ($rows as $r) { if (!$first) echo ','; $first = false; echo wp_json_encode($r); }
+                    $offset += $limit; if (function_exists('flush')) { flush(); }
+                } while (count($rows) === $limit);
+                echo ']'; exit;
+            } else {
+                header('Content-Type: text/csv; charset=utf-8');
+                header('Content-Disposition: attachment; filename=leadstream-phone-clicks-backup.csv');
+                $out = fopen('php://output', 'w'); if ($excel) { echo "\xEF\xBB\xBF"; } $offset = 0; $limit = 5000; $wroteHeader = false; do {
+                    $sql = "SELECT * FROM {$table} WHERE {$where_sql} ORDER BY id ASC LIMIT %d OFFSET %d";
+                    $rows = $wpdb->get_results($wpdb->prepare($sql, array_merge($par, [$limit, $offset])), ARRAY_A);
+                    if (!$rows) break; if (!$wroteHeader) { fputcsv($out, array_keys($rows[0])); $wroteHeader = true; }
+                    foreach ($rows as $r) { fputcsv($out, $r); }
+                    $offset += $limit; if (function_exists('flush')) { flush(); }
+                } while (count($rows) === $limit); fclose($out); exit;
+            }
+        }
+        // CSV Import for Phone Clicks
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ls_import_phone_clicks'])) {
+            if (!current_user_can('manage_options')) { wp_die('Permission denied'); }
+            check_admin_referer('ls_import_phone_clicks', 'ls_import_phone_clicks_nonce');
+            $truncate = !empty($_POST['ls_import_truncate']);
+            if (!empty($_FILES['ls_import_file']['tmp_name'])) {
+                global $wpdb; $table = $wpdb->prefix . 'ls_clicks';
+                if ($truncate) { $wpdb->query($wpdb->prepare("DELETE FROM {$table} WHERE link_type = %s", 'phone')); }
+                if (($fh = fopen($_FILES['ls_import_file']['tmp_name'], 'r'))) {
+                    $header = fgetcsv($fh); $count = 0; $max = 20000; if (is_array($header)) { $header = array_map('trim', $header); }
+                    $allowed = ['link_id','link_type','link_key','target_url','clicked_at','click_datetime','click_date','click_time','ip_address','user_agent','user_id','referrer','page_url','page_title','element_type','element_class','element_id','meta_data'];
+                    while (($row = fgetcsv($fh)) !== false && $count < $max) {
+                        $data = array_combine($header, $row); if (!$data) continue;
+                        $rec = array_intersect_key($data, array_flip($allowed));
+                        $rec = array_map('wp_kses_post', $rec);
+                        $rec['link_type'] = 'phone';
+                        if (empty($rec['clicked_at'])) {
+                            $cd = $rec['click_date'] ?? ''; $ct = $rec['click_time'] ?? '';
+                            $rec['clicked_at'] = trim($cd . ' ' . $ct) ?: current_time('mysql');
+                        }
+                        $wpdb->insert($table, $rec);
+                        $count++;
+                    }
+                    fclose($fh);
+                    echo '<div class="notice notice-success is-dismissible"><p>Imported ' . intval($count) . ' phone click rows.</p></div>';
+                }
+            }
+        }
+
+        // Date-range delete for phone clicks
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ls_delete_phone_clicks_range'])) {
+            if (!current_user_can('manage_options')) { wp_die('Permission denied'); }
+            check_admin_referer('ls_delete_phone_clicks_range', 'ls_delete_phone_clicks_range_nonce');
+            $dz_from = isset($_POST['dz_from']) ? sanitize_text_field($_POST['dz_from']) : '';
+            $dz_to   = isset($_POST['dz_to'])   ? sanitize_text_field($_POST['dz_to'])   : '';
+            if ($dz_from && $dz_to) {
+                global $wpdb; $table = $wpdb->prefix . 'ls_clicks';
+                $from = $dz_from . ' 00:00:00'; $to = $dz_to . ' 23:59:59';
+                $wpdb->query($wpdb->prepare("DELETE FROM {$table} WHERE link_type = %s AND clicked_at BETWEEN %s AND %s", 'phone', $from, $to));
+                echo '<div class="notice notice-warning is-dismissible"><p>Deleted phone clicks between ' . esc_html($dz_from) . ' and ' . esc_html($dz_to) . '.</p></div>';
+            } else {
+                echo '<div class="notice notice-error is-dismissible"><p>Please provide a valid From and To date.</p></div>';
+            }
+        }
+
+        // Dangerous: Flush phone clicks
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ls_flush_phone_clicks'])) {
+            if (!current_user_can('manage_options')) { wp_die('Permission denied'); }
+            check_admin_referer('ls_flush_phone', 'ls_flush_phone_nonce');
+            global $wpdb;
+            $table = $wpdb->prefix . 'ls_clicks';
+            // Only remove phone click rows
+            $wpdb->query($wpdb->prepare("DELETE FROM {$table} WHERE link_type = %s", 'phone'));
+            echo '<div class="notice notice-error" style="border-left-color:#d63638"><p><strong>Flushed:</strong> All Phone Clicks have been permanently deleted from the database.</p></div>';
+        }
+
         // Handle form submission
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['leadstream_phone_submit'])) {
             check_admin_referer('leadstream_phone_settings', 'leadstream_phone_nonce');
@@ -1272,6 +1670,43 @@ document.addEventListener('wpformsSubmit', function (event) {
             // Save optional recording URL
             $recording_url = isset($_POST['leadstream_phone_recording_url']) ? esc_url_raw(trim($_POST['leadstream_phone_recording_url'])) : '';
             update_option('leadstream_phone_recording_url', $recording_url);
+
+            // Sticky Call Bar settings
+            $callbar_enabled = isset($_POST['leadstream_callbar_enabled']) ? 1 : 0;
+            update_option('leadstream_callbar_enabled', $callbar_enabled);
+            $callbar_default = sanitize_text_field($_POST['leadstream_callbar_default'] ?? '');
+            update_option('leadstream_callbar_default', $callbar_default);
+            $callbar_mobile_only = isset($_POST['leadstream_callbar_mobile_only']) ? 1 : 0;
+            update_option('leadstream_callbar_mobile_only', $callbar_mobile_only);
+            $callbar_position = in_array(($_POST['leadstream_callbar_position'] ?? 'bottom'), ['top','bottom'], true) ? $_POST['leadstream_callbar_position'] : 'bottom';
+            update_option('leadstream_callbar_position', $callbar_position);
+            $callbar_cta = sanitize_text_field($_POST['leadstream_callbar_cta'] ?? 'Call Now');
+            update_option('leadstream_callbar_cta', $callbar_cta);
+            $dni_rules_text = sanitize_textarea_field($_POST['leadstream_dni_rules'] ?? '');
+            update_option('leadstream_dni_rules', $dni_rules_text);
+
+            // Ensure callbar numbers are also tracked: merge default + rules into phone_numbers
+            $extra_numbers = [];
+            if (!empty($callbar_default)) {
+                $extra_numbers = array_merge($extra_numbers, self::sanitize_phone_numbers([$callbar_default]));
+            }
+            if (!empty($dni_rules_text)) {
+                $lines = preg_split('/\r?\n/', $dni_rules_text);
+                foreach ($lines as $line) {
+                    $line = trim($line);
+                    if ($line === '' || strpos($line, '#') === 0) { continue; }
+                    // Accept formats like: key=value, key -> value, key: value
+                    if (preg_match('/^.+?[=:>\-]{1,2}\s*(.+)$/', $line, $m)) {
+                        $num = trim($m[1]);
+                        $extra_numbers = array_merge($extra_numbers, self::sanitize_phone_numbers([$num]));
+                    }
+                }
+            }
+            if (!empty($extra_numbers)) {
+                $merged = array_values(array_unique(array_filter(array_merge($phone_numbers, $extra_numbers))));
+                $phone_numbers = $merged;
+                update_option('leadstream_phone_numbers', $merged);
+            }
             
             // Show success message with normalization feedback
             $normalized_count = count($phone_numbers);
@@ -1285,11 +1720,18 @@ document.addEventListener('wpformsSubmit', function (event) {
             echo '<div class="notice notice-success is-dismissible"><p>' . $message . '</p></div>';
         }
         
-        // Get current settings
+    // Get current settings
     $phone_numbers = get_option('leadstream_phone_numbers', array());
     $css_selectors = get_option('leadstream_phone_selectors', '');
     $phone_enabled = get_option('leadstream_phone_enabled', 1);
     $recording_url = get_option('leadstream_phone_recording_url', '');
+    // Call bar & DNI
+    $callbar_enabled = (int) get_option('leadstream_callbar_enabled', 0);
+    $callbar_default = (string) get_option('leadstream_callbar_default', '');
+    $callbar_mobile_only = (int) get_option('leadstream_callbar_mobile_only', 1);
+    $callbar_position = (string) get_option('leadstream_callbar_position', 'bottom');
+    $callbar_cta = (string) get_option('leadstream_callbar_cta', 'Call Now');
+    $dni_rules_text = (string) get_option('leadstream_dni_rules', "");
         
         // Get phone click stats with proper wpdb->prepare() usage
         global $wpdb;
@@ -1345,6 +1787,126 @@ document.addEventListener('wpformsSubmit', function (event) {
             </div>
             <?php endif; ?>
             
+            <?php
+            // Calls Outcomes (provider webhooks) with filters + CSV + pagination
+            $calls_table = $wpdb->prefix . 'ls_calls';
+            $calls_exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $calls_table)) === $calls_table;
+            if ($calls_exists):
+                $c_from = isset($_GET['c_from']) ? sanitize_text_field($_GET['c_from']) : '';
+                $c_to   = isset($_GET['c_to'])   ? sanitize_text_field($_GET['c_to'])   : '';
+                $c_status = isset($_GET['c_status']) ? sanitize_text_field($_GET['c_status']) : '';
+                $c_provider = isset($_GET['c_provider']) ? sanitize_text_field($_GET['c_provider']) : '';
+                $c_fromnum = isset($_GET['c_fromnum']) ? sanitize_text_field($_GET['c_fromnum']) : '';
+                $c_tonum   = isset($_GET['c_tonum'])   ? sanitize_text_field($_GET['c_tonum'])   : '';
+                $c_group = isset($_GET['c_group']) ? sanitize_text_field($_GET['c_group']) : '';
+                $c_pp = isset($_GET['c_pp']) ? max(10, min(200, intval($_GET['c_pp']))) : 25;
+                $c_p  = isset($_GET['c_p'])  ? max(1, intval($_GET['c_p'])) : 1;
+                $c_export = isset($_GET['c_export']) && $_GET['c_export'] === 'csv';
+
+                $cw = ['1=1']; $cp = [];
+                if ($c_from) { $cw[] = 'start_time >= %s'; $cp[] = $c_from . ' 00:00:00'; }
+                if ($c_to)   { $cw[] = 'start_time <= %s'; $cp[] = $c_to   . ' 23:59:59'; }
+                // Grouped status shortcuts
+                $missed_group = ['no-answer','busy','failed','canceled','missed','no_answer'];
+                $answered_group = ['completed','answered','ok','success'];
+                if ($c_group === 'missed') {
+                    $placeholders = implode(',', array_fill(0, count($missed_group), '%s'));
+                    $cw[] = "status IN ($placeholders)"; $cp = array_merge($cp, $missed_group);
+                } elseif ($c_group === 'answered') {
+                    $placeholders = implode(',', array_fill(0, count($answered_group), '%s'));
+                    $cw[] = "status IN ($placeholders)"; $cp = array_merge($cp, $answered_group);
+                } elseif ($c_status) {
+                    $cw[] = 'status = %s'; $cp[] = $c_status;
+                }
+                if ($c_provider) { $cw[] = 'provider = %s'; $cp[] = $c_provider; }
+                if ($c_fromnum) { $cw[] = 'from_number = %s'; $cp[] = $c_fromnum; }
+                if ($c_tonum)   { $cw[] = 'to_number = %s'; $cp[] = $c_tonum; }
+                $cw_sql = implode(' AND ', $cw);
+
+                if ($c_export && current_user_can('manage_options')) {
+                    if (function_exists('ob_get_level')) { while (ob_get_level()) { ob_end_clean(); } }
+                    $csv_sql = "SELECT start_time, end_time, duration, provider, status, from_number, to_number, recording_url FROM {$calls_table} WHERE {$cw_sql} ORDER BY start_time DESC LIMIT %d";
+                    $rows = $wpdb->get_results($wpdb->prepare($csv_sql, array_merge($cp, [10000])), ARRAY_A);
+                    header('Content-Type: text/csv; charset=utf-8');
+                    header('Content-Disposition: attachment; filename=leadstream-call-outcomes.csv');
+                    $out = fopen('php://output', 'w');
+                    fputcsv($out, array_keys(reset($rows) ?: ['start_time','end_time','duration','provider','status','from_number','to_number','recording_url']));
+                    foreach ($rows as $r) { fputcsv($out, $r); }
+                    fclose($out); exit;
+                }
+
+                $c_count_sql = "SELECT COUNT(*) FROM {$calls_table} WHERE {$cw_sql}";
+                $c_total = (int) $wpdb->get_var($wpdb->prepare($c_count_sql, $cp));
+                $c_offset = ($c_p - 1) * $c_pp;
+                $c_data_sql = "SELECT id, start_time, end_time, duration, provider, status, from_number, to_number, recording_url FROM {$calls_table} WHERE {$cw_sql} ORDER BY start_time DESC LIMIT %d OFFSET %d";
+                $c_rows = $wpdb->get_results($wpdb->prepare($c_data_sql, array_merge($cp, [$c_pp, $c_offset])));
+
+                $providers = $wpdb->get_col("SELECT DISTINCT provider FROM {$calls_table} ORDER BY provider");
+                $statuses  = $wpdb->get_col("SELECT DISTINCT status FROM {$calls_table} ORDER BY status");
+            ?>
+            <button type="button" class="button button-secondary button-small ls-acc-toggle" data-acc="ls-call-outcomes" aria-controls="ls-call-outcomes" aria-expanded="true">📞 Call Outcomes</button>
+            <div id="ls-call-outcomes" class="ls-acc-panel ls-call-outcomes" style="margin-top: 10px;">
+                <h3 class="screen-reader-text">📞 Call Outcomes</h3>
+                <form class="js-calls-filters" method="get" style="margin-bottom:12px; display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:10px; align-items:end;">
+                    <input type="hidden" name="page" value="leadstream-analytics-injector" />
+                    <input type="hidden" name="tab" value="phone" />
+                    <input type="hidden" name="c_group" value="<?php echo esc_attr($c_group); ?>" />
+                    <div>
+                        <label style="display:block; font-size:12px; color:#646970;">From</label>
+                        <input type="date" name="c_from" value="<?php echo esc_attr($c_from); ?>" />
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:12px; color:#646970;">To</label>
+                        <input type="date" name="c_to" value="<?php echo esc_attr($c_to); ?>" />
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:12px; color:#646970;">Provider</label>
+                        <select name="c_provider">
+                            <option value="">All</option>
+                            <?php foreach ($providers as $pr): ?>
+                                <option value="<?php echo esc_attr($pr); ?>" <?php selected($c_provider, $pr); ?>><?php echo esc_html($pr); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:12px; color:#646970;">Status</label>
+                        <select name="c_status">
+                            <option value="">All</option>
+                            <?php foreach ($statuses as $st): ?>
+                                <option value="<?php echo esc_attr($st); ?>" <?php selected($c_status, $st); ?>><?php echo esc_html($st); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:12px; color:#646970;">From number</label>
+                        <input type="text" name="c_fromnum" value="<?php echo esc_attr($c_fromnum); ?>" placeholder="digits" />
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:12px; color:#646970;">To number</label>
+                        <input type="text" name="c_tonum" value="<?php echo esc_attr($c_tonum); ?>" placeholder="digits" />
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:12px; color:#646970;">Per page</label>
+                        <input type="number" name="c_pp" value="<?php echo esc_attr($c_pp); ?>" min="10" max="200" />
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="button button-primary" type="submit">Filter</button>
+                        <a class="button" href="<?php echo esc_url(add_query_arg(['page'=>'leadstream-analytics-injector','tab'=>'phone'], admin_url('admin.php'))); ?>">Reset</a>
+                        <a class="button button-secondary" href="<?php echo esc_url(add_query_arg(array_merge($_GET, ['c_export'=>'csv']))); ?>">Export CSV</a>
+                    </div>
+                    <div class="ls-quick-chips" style="grid-column:1/-1; display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:4px;">
+                        <span style="font-size:12px; color:#646970;">Quick:</span>
+                        <button type="button" class="button ls-chip" data-chip="c_missed">Missed</button>
+                        <button type="button" class="button ls-chip" data-chip="c_answered">Answered</button>
+                        <button type="button" class="button ls-chip" data-chip="c_last7">Last 7 Days</button>
+                    </div>
+                </form>
+
+                <div style="margin-bottom:8px; color:#646970; font-size:12px;">Showing <?php echo number_format(min($c_pp, max(0, $c_total - $c_offset))); ?> of <?php echo number_format($c_total); ?> result<?php echo $c_total==1?'':'s'; ?>.</div>
+
+                <?php echo self::render_calls_fragment($c_rows, $c_total, $c_pp, $c_p); ?>
+            </div>
+            <?php endif; ?>
             <!-- Phone Tracking Stats (always visible, default 0s) -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px;">
                 <div style="text-align: center; padding: 15px; background: #f0f6fc; border-radius: 6px; border-left: 4px solid #2271b1;">
@@ -1429,6 +1991,59 @@ document.addEventListener('wpformsSubmit', function (event) {
                 <table class="form-table" role="presentation">
                     <tbody>
                         <tr>
+                            <th colspan="2"><h3 style="margin:8px 0;">📱 Mobile Sticky Call Bar</h3></th>
+                        </tr>
+                        <tr>
+                            <th scope="row">
+                                <label for="leadstream_callbar_enabled">Enable Call Bar</label>
+                            </th>
+                            <td>
+                                <label style="display:flex; align-items:center; gap:10px;">
+                                    <input type="checkbox" id="leadstream_callbar_enabled" name="leadstream_callbar_enabled" value="1" <?php checked($callbar_enabled, 1); ?> />
+                                    Show a sticky "Call Now" bar on mobile
+                                </label>
+                                <p class="description">Appears on mobile devices only by default. Clicking the bar uses your tracking just like any tel: link.</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
+                                <label for="leadstream_callbar_default">Default Phone Number</label>
+                            </th>
+                            <td>
+                                <input id="leadstream_callbar_default" name="leadstream_callbar_default" type="text" class="regular-text" value="<?php echo esc_attr($callbar_default); ?>" placeholder="(555) 123-4567" />
+                                <p class="description">Used when no dynamic rule matches. Automatically added to tracked numbers when saved.</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="leadstream_callbar_cta">CTA Text</label></th>
+                            <td>
+                                <input id="leadstream_callbar_cta" name="leadstream_callbar_cta" type="text" class="regular-text" value="<?php echo esc_attr($callbar_cta); ?>" placeholder="Call Now" />
+                                <p class="description">Text shown on the sticky bar button.</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label>Position</label></th>
+                            <td>
+                                <label><input type="radio" name="leadstream_callbar_position" value="bottom" <?php checked($callbar_position, 'bottom'); ?> /> Bottom</label>
+                                &nbsp;&nbsp;
+                                <label><input type="radio" name="leadstream_callbar_position" value="top" <?php checked($callbar_position, 'top'); ?> /> Top</label>
+                                &nbsp;&nbsp;
+                                <label style="margin-left:12px;">
+                                    <input type="checkbox" name="leadstream_callbar_mobile_only" value="1" <?php checked($callbar_mobile_only, 1); ?> /> Mobile only
+                                </label>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="leadstream_dni_rules">Dynamic Number Insertion (DNI)</label></th>
+                            <td>
+                                <textarea id="leadstream_dni_rules" name="leadstream_dni_rules" rows="4" class="large-text" placeholder="utm_source=google => (555) 111-2222&#10;ref=facebook.com => +1 555-333-4444&#10;path=/landing/california => 555-777-8888&#10;campaign=spring-sale => 555-999-0000"><?php echo esc_textarea($dni_rules_text); ?></textarea>
+                                <p class="description">
+                                    One rule per line. Supported patterns: <code>utm_source=VALUE</code>, <code>ref=DOMAIN</code>, <code>path=/partial</code>, or any URL/referrer substring. Use <code>=> NUMBER</code> to assign the phone.<br>
+                                    Example: <code>utm_source=google =&gt; 1-800-555-1234</code>. All numbers here are auto-added to your tracked list on save.
+                                </p>
+                            </td>
+                        </tr>
+                        <tr>
                             <th scope="row">
                                 <label for="leadstream_phone_numbers">Phone Numbers to Track</label>
                             </th>
@@ -1485,6 +2100,62 @@ document.addEventListener('wpformsSubmit', function (event) {
                     </button>
                 </div>
             </form>
+
+            <?php
+            // Missed calls (from provider webhooks)
+            global $wpdb;
+            $calls_table = $wpdb->prefix . 'ls_calls';
+            $calls_exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $calls_table)) === $calls_table;
+            if ($calls_exists):
+                $missed_statuses = ['no-answer','busy','failed','canceled','missed'];
+                $placeholders = implode(',', array_fill(0, count($missed_statuses), '%s'));
+                $recent_missed = $wpdb->get_results($wpdb->prepare(
+                    "SELECT start_time, from_number, to_number, status, recording_url FROM {$calls_table} WHERE status IN ($placeholders) ORDER BY start_time DESC LIMIT 20",
+                    $missed_statuses
+                ));
+            ?>
+            <button type="button" class="button button-secondary button-small ls-acc-toggle" data-acc="ls-missed-calls" aria-controls="ls-missed-calls" aria-expanded="true">🚫 Missed Calls (Webhook)</button>
+            <div id="ls-missed-calls" class="ls-acc-panel" style="margin-top: 10px;">
+                <h3 class="screen-reader-text">🚫 Missed Calls</h3>
+                <?php if (empty($recent_missed)): ?>
+                    <div style="padding:12px; color:#646970;">No missed calls recorded yet.</div>
+                <?php else: ?>
+                <table class="widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th width="18%">When</th>
+                            <th width="22%">From</th>
+                            <th width="22%">To</th>
+                            <th width="16%">Status</th>
+                            <th>Recording</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($recent_missed as $row): ?>
+                        <tr>
+                            <td><?php echo $row->start_time ? esc_html(date_i18n('M j, Y g:i A', strtotime($row->start_time))) : '<span style="color:#787c82;">—</span>'; ?></td>
+                            <td><code><?php echo esc_html($row->from_number ?: ''); ?></code></td>
+                            <td><code><?php echo esc_html($row->to_number ?: ''); ?></code></td>
+                            <td><?php echo esc_html($row->status ?: ''); ?></td>
+                            <td>
+                                <?php if (!empty($row->recording_url)): ?>
+                                    <a class="button button-small" href="<?php echo esc_url($row->recording_url); ?>" target="_blank" rel="noopener">Listen</a>
+                                <?php else: ?>
+                                    <span style="color:#787c82;">—</span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <?php endif; ?>
+                <div style="margin-top:10px; color:#50575e;">
+                    <strong>Webhook Endpoint:</strong>
+                    <?php $endpoint = rest_url('leadstream/v1/calls'); ?>
+                    <code><?php echo esc_html($endpoint); ?></code>
+                </div>
+            </div>
+            <?php endif; ?>
             
             <!-- How It Works Section -->
             <button type="button" class="button button-secondary button-small ls-acc-toggle" data-acc="ls-how-it-works" aria-controls="ls-how-it-works" aria-expanded="true">🔧 How Phone Tracking Works</button>
@@ -1853,6 +2524,12 @@ document.addEventListener('wpformsSubmit', function (event) {
                         <a class="button" href="<?php echo esc_url(add_query_arg(['page'=>'leadstream-analytics-injector','tab'=>'phone'], admin_url('admin.php'))); ?>">Reset</a>
                         <a class="button button-secondary" href="<?php echo esc_url(add_query_arg(array_merge($_GET, ['export'=>'csv']))); ?>">Export CSV</a>
                     </div>
+                    <div class="ls-quick-chips" style="grid-column:1/-1; display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:4px;">
+                        <span style="font-size:12px; color:#646970;">Quick:</span>
+                        <button type="button" class="button ls-chip" data-chip="p_today">Today</button>
+                        <button type="button" class="button ls-chip" data-chip="p_last7">Last 7 Days</button>
+                        <button type="button" class="button ls-chip" data-chip="p_month">This Month</button>
+                    </div>
                 </form>
 
                 <div style="margin-bottom:8px; color:#646970; font-size:12px;">Showing <?php echo number_format(min($per_page, max(0, $total_count - $offset))); ?> of <?php echo number_format($total_count); ?> result<?php echo $total_count==1?'':'s'; ?>.</div>
@@ -1901,6 +2578,66 @@ document.addEventListener('wpformsSubmit', function (event) {
                 </details>
             </div>
         </div>
+
+        <?php if (current_user_can('manage_options')): ?>
+        <!-- Import: Phone Clicks (separate card) -->
+        <div style="margin-top: 18px; padding:16px; border:1px solid #ccd0d4; background:#fff; border-radius:6px;">
+            <h3 style="margin:0 0 6px 0;">Import: Phone Clicks</h3>
+            <p style="margin:6px 0 12px 0; color:#50575e;">Upload a CSV backup of phone clicks to restore. Headers should match the ls_clicks columns. Only rows with link_type=phone will be imported.</p>
+            <form method="post" enctype="multipart/form-data" style="display:flex; gap:10px; align-items:end; flex-wrap:wrap;">
+                <?php wp_nonce_field('ls_import_phone_clicks','ls_import_phone_clicks_nonce'); ?>
+                <div>
+                    <label>CSV File<br><input type="file" name="ls_import_file" accept=".csv" required></label>
+                </div>
+                <label style="display:flex; align-items:center; gap:6px;">
+                    <input type="checkbox" name="ls_import_truncate" value="1"> Truncate existing phone clicks before import
+                </label>
+                <button type="submit" name="ls_import_phone_clicks" value="1" class="button">Import CSV</button>
+            </form>
+        </div>
+
+        <!-- Danger Zone: Flush Phone Clicks -->
+        <details class="ls-acc" id="ls-dz-phone" style="margin-top:18px;">
+            <summary style="padding:12px 16px; border:1px solid #d63638; border-radius:6px; background:#fff5f5; color:#b32d2e; font-weight:600; cursor:pointer;">Danger Zone: Flush Phone Clicks</summary>
+            <div style="padding:16px; border:1px solid #d63638; border-top:none; background:#fff5f5; border-radius:0 0 6px 6px;">
+            <p style="margin:6px 0 12px 0; color:#8a1f1f;">
+                This permanently deletes all tracked Phone Clicks from your database. Use only to resolve data issues or reduce database size. This cannot be undone.
+            </p>
+            <form method="get" style="margin:6px 0 12px 0; display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
+                <input type="hidden" name="page" value="leadstream-analytics-injector" />
+                <input type="hidden" name="tab" value="phone" />
+                <input type="hidden" name="dz_export" value="phone_clicks" />
+                <input type="hidden" name="ls_dz_export" value="<?php echo esc_attr(wp_create_nonce('ls_dz_export')); ?>" />
+                <label>From<br><input type="date" name="dz_from" /></label>
+                <label>To<br><input type="date" name="dz_to" /></label>
+                <label style="display:flex; align-items:center; gap:6px;">
+                    <input type="checkbox" name="excel" value="1" /> Open in Excel
+                </label>
+                <button class="button button-secondary" type="submit" name="fmt" value="csv">Export CSV</button>
+                <button class="button" type="submit" name="fmt" value="json">Export JSON</button>
+                <span style="margin-left:8px; color:#8a1f1f;">Download a filtered backup before deleting.</span>
+            </form>
+            <label style="display:flex; align-items:center; gap:8px; margin:8px 0; color:#8a1f1f;">
+                <input type="checkbox" id="ls-confirm-phone-flush" />
+                <span>I understand this will permanently remove all phone click records from the database.</span>
+            </label>
+            <form method="post" onsubmit="return (document.getElementById('ls-confirm-phone-flush')?.checked && confirm('This will permanently delete all Phone Click rows. Are you sure?'));">
+                <?php wp_nonce_field('ls_flush_phone','ls_flush_phone_nonce'); ?>
+                <button type="submit" name="ls_flush_phone_clicks" value="1" class="button" style="background:#d63638; border-color:#d63638; color:#fff;" disabled id="ls-btn-phone-flush">
+                    Delete All Phone Clicks
+                </button>
+            </form>
+            <div style="margin-top:10px;">
+                <form method="post" onsubmit="return window.LSConfirmRange && LSConfirmRange(this, 'phone')" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
+                    <?php wp_nonce_field('ls_delete_phone_clicks_range','ls_delete_phone_clicks_range_nonce'); ?>
+                    <label>Delete Phone Clicks From<br><input type="date" name="dz_from" required /></label>
+                    <label>To<br><input type="date" name="dz_to" required /></label>
+                    <button type="submit" name="ls_delete_phone_clicks_range" value="1" class="button" style="background:#f0b429; border-color:#f0b429; color:#1d2327;">Delete Phone Clicks in Range</button>
+                </form>
+            </div>
+            </div>
+        </details>
+        <?php endif; ?>
         <?php
     }
 
@@ -1975,6 +2712,105 @@ document.addEventListener('wpformsSubmit', function (event) {
         return ob_get_clean();
     }
 
+    // Reusable fragment renderer for Calls Outcomes (wp_ls_calls)
+    private static function render_calls_fragment($rows, $total_count, $per_page, $paged) {
+        ob_start();
+        ?>
+        <table class="widefat fixed striped">
+            <thead>
+                <tr>
+                    <th width="18%">Start</th>
+                    <th width="10%">Duration</th>
+                    <th width="12%">Provider</th>
+                    <th width="12%">Status</th>
+                    <th width="18%">From</th>
+                    <th width="18%">To</th>
+                    <th>Recording</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($rows)): ?>
+                <tr><td colspan="7" style="text-align:center; color:#646970;">No calls found for the selected filters.</td></tr>
+                <?php else: foreach ($rows as $r): ?>
+                <tr>
+                    <td><?php echo $r->start_time ? esc_html(date_i18n('M j, Y g:i A', strtotime($r->start_time))) : '<span style="color:#787c82;">—</span>'; ?></td>
+                    <td><?php echo $r->duration ? esc_html($r->duration . 's') : '<span style="color:#787c82;">—</span>'; ?></td>
+                    <td><?php echo esc_html($r->provider ?: ''); ?></td>
+                    <td><?php echo esc_html($r->status ?: ''); ?></td>
+                    <td><code><?php echo esc_html($r->from_number ?: ''); ?></code></td>
+                    <td><code><?php echo esc_html($r->to_number ?: ''); ?></code></td>
+                    <td>
+                        <?php if (!empty($r->recording_url)): ?>
+                            <a class="button button-small" href="<?php echo esc_url($r->recording_url); ?>" target="_blank" rel="noopener">Listen</a>
+                        <?php else: ?>
+                            <span style="color:#787c82;">—</span>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <?php endforeach; endif; ?>
+            </tbody>
+        </table>
+
+        <?php $total_pages = max(1, ceil($total_count / $per_page));
+        if ($total_pages > 1):
+            echo '<div class="tablenav"><div class="tablenav-pages">';
+            for ($i=1; $i<=$total_pages; $i++) {
+                $url = add_query_arg(array_merge($_GET, ['c_p'=>$i]));
+                $style = $i==$paged ? 'font-weight:600;' : '';
+                echo '<a class="page-numbers js-paginate" data-args=' . esc_attr(wp_json_encode(array_merge($_GET, ['c_p'=>$i]))) . ' style="margin-right:6px; ' . esc_attr($style) . '" href="' . esc_url($url) . '">' . intval($i) . '</a>';
+            }
+            echo '</div></div>';
+        endif; ?>
+        <?php
+        return ob_get_clean();
+    }
+
+    // AJAX: return Calls Outcomes fragment
+    public static function ajax_calls_table() {
+        if (!current_user_can('manage_options')) { wp_send_json_error(['message'=>'forbidden'], 403); }
+        check_ajax_referer('ls-admin','nonce');
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'ls_calls';
+        $from = isset($_REQUEST['c_from']) ? sanitize_text_field(wp_unslash($_REQUEST['c_from'])) : '';
+        $to   = isset($_REQUEST['c_to'])   ? sanitize_text_field(wp_unslash($_REQUEST['c_to']))   : '';
+        $status = isset($_REQUEST['c_status']) ? sanitize_text_field(wp_unslash($_REQUEST['c_status'])) : '';
+        $provider = isset($_REQUEST['c_provider']) ? sanitize_text_field(wp_unslash($_REQUEST['c_provider'])) : '';
+        $fromnum = isset($_REQUEST['c_fromnum']) ? sanitize_text_field(wp_unslash($_REQUEST['c_fromnum'])) : '';
+        $tonum   = isset($_REQUEST['c_tonum'])   ? sanitize_text_field(wp_unslash($_REQUEST['c_tonum']))   : '';
+    $per_page = isset($_REQUEST['c_pp']) ? max(10, min(200, intval($_REQUEST['c_pp']))) : 25;
+        $paged = isset($_REQUEST['c_p']) ? max(1, intval($_REQUEST['c_p'])) : 1;
+    $group = isset($_REQUEST['c_group']) ? sanitize_text_field(wp_unslash($_REQUEST['c_group'])) : '';
+
+        $w = ['1=1']; $p = [];
+        if ($from)    { $w[] = 'start_time >= %s'; $p[] = $from . ' 00:00:00'; }
+        if ($to)      { $w[] = 'start_time <= %s'; $p[] = $to   . ' 23:59:59'; }
+        $missed_group = ['no-answer','busy','failed','canceled','missed','no_answer'];
+        $answered_group = ['completed','answered','ok','success'];
+        if ($group === 'missed') {
+            $ph = implode(',', array_fill(0, count($missed_group), '%s'));
+            $w[] = "status IN ($ph)"; $p = array_merge($p, $missed_group);
+        } elseif ($group === 'answered') {
+            $ph = implode(',', array_fill(0, count($answered_group), '%s'));
+            $w[] = "status IN ($ph)"; $p = array_merge($p, $answered_group);
+        } elseif ($status)  { $w[] = 'status = %s'; $p[] = $status; }
+        if ($provider){ $w[] = 'provider = %s'; $p[] = $provider; }
+        if ($fromnum) { $w[] = 'from_number = %s'; $p[] = $fromnum; }
+        if ($tonum)   { $w[] = 'to_number = %s'; $p[] = $tonum; }
+        $where_sql = implode(' AND ', $w);
+
+        $count_sql = "SELECT COUNT(*) FROM {$table} WHERE {$where_sql}";
+        $total = (int) $wpdb->get_var($wpdb->prepare($count_sql, $p));
+        $offset = ($paged - 1) * $per_page;
+        $data_sql = "SELECT id, start_time, end_time, duration, provider, status, from_number, to_number, recording_url FROM {$table} WHERE {$where_sql} ORDER BY start_time DESC LIMIT %d OFFSET %d";
+        $rows = $wpdb->get_results($wpdb->prepare($data_sql, array_merge($p, [$per_page, $offset])));
+
+        $html = self::render_calls_fragment($rows, $total, $per_page, $paged);
+    $url = add_query_arg(array_merge([
+            'page' => 'leadstream-analytics-injector', 'tab' => 'phone'
+    ], array_intersect_key($_REQUEST, array_flip(['c_from','c_to','c_status','c_provider','c_fromnum','c_tonum','c_group','c_pp','c_p']))), admin_url('admin.php'));
+        wp_send_json_success(['html'=>$html, 'url'=>$url]);
+    }
     // AJAX: return All Phone Calls fragment
     public static function ajax_phone_table() {
         if (!current_user_can('manage_options')) { wp_send_json_error(['message'=>'forbidden'], 403); }
@@ -2017,8 +2853,7 @@ document.addEventListener('wpformsSubmit', function (event) {
      * Render Pretty Links tab
      */
     private static function render_links_tab() {
-        // Buffer output so CSV exports can clear and send headers safely.
-        if (!headers_sent()) { ob_start(); }
+    // Export handled earlier in display_settings_page() to avoid accidental output before headers
         ?>
         <div class="leadstream-pretty-links">
             <h2>🎯 Pretty Links Dashboard</h2>
@@ -2350,6 +3185,80 @@ document.addEventListener('wpformsSubmit', function (event) {
             </div>
             <?php endif; ?>
         </div>
+
+        <?php if (current_user_can('manage_options')): ?>
+        <!-- Import: Pretty Links (separate card) -->
+        <div style="margin-top: 18px; padding:16px; border:1px solid #ccd0d4; background:#fff; border-radius:6px;">
+            <h3 style="margin:0 0 6px 0;">Import: Pretty Links</h3>
+            <p style="margin:6px 0 12px 0; color:#50575e;">Upload CSV backups exported from LeadStream. Use the Links form for slugs/targets and the Clicks form for click history.</p>
+            <form method="post" enctype="multipart/form-data" style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:10px;">
+                <?php wp_nonce_field('ls_import_links','ls_import_links_nonce'); ?>
+                <div><label>Pretty Links CSV<br><input type="file" name="ls_import_file_links" accept=".csv" required></label></div>
+                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" name="ls_import_truncate_links" value="1"> Truncate existing pretty links before import</label>
+                <button type="submit" name="ls_import_links" value="1" class="button">Import Pretty Links CSV</button>
+            </form>
+            <form method="post" enctype="multipart/form-data" style="display:flex; gap:10px; align-items:end; flex-wrap:wrap;">
+                <?php wp_nonce_field('ls_import_link_clicks','ls_import_link_clicks_nonce'); ?>
+                <div><label>Link Clicks CSV<br><input type="file" name="ls_import_file" accept=".csv" required></label></div>
+                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" name="ls_import_truncate" value="1"> Truncate existing link clicks before import</label>
+                <button type="submit" name="ls_import_link_clicks" value="1" class="button">Import Link Clicks CSV</button>
+            </form>
+        </div>
+
+        <!-- Danger Zone: Pretty Links -->
+        <div style="margin-top: 18px; padding:16px; border:1px solid #d63638; background:#fff5f5; border-radius:6px;">
+            <h3 style="margin:0 0 6px 0; color:#b32d2e;">Danger Zone: Flush Pretty Links Data</h3>
+            <p style="margin:6px 0 12px 0; color:#8a1f1f;">
+                These actions permanently delete data from your database. Use only to resolve data issues or reduce database size. This cannot be undone.
+            </p>
+            <div style="margin:6px 0 12px 0; display:grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap:8px; align-items:end;">
+                <form method="get" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
+                    <input type="hidden" name="page" value="leadstream-analytics-injector" />
+                    <input type="hidden" name="tab" value="links" />
+                    <input type="hidden" name="dz_export" value="link_clicks" />
+                    <input type="hidden" name="ls_dz_export" value="<?php echo esc_attr(wp_create_nonce('ls_dz_export')); ?>" />
+                    <label>From<br><input type="date" name="dz_from" /></label>
+                    <label>To<br><input type="date" name="dz_to" /></label>
+                    <button class="button button-secondary" type="submit" name="fmt" value="csv">Export Link Clicks CSV</button>
+                    <button class="button" type="submit" name="fmt" value="json">Export Link Clicks JSON</button>
+                </form>
+                <form method="get" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
+                    <input type="hidden" name="page" value="leadstream-analytics-injector" />
+                    <input type="hidden" name="tab" value="links" />
+                    <input type="hidden" name="dz_export" value="links" />
+                    <input type="hidden" name="ls_dz_export" value="<?php echo esc_attr(wp_create_nonce('ls_dz_export')); ?>" />
+                    <label>From<br><input type="date" name="dz_from" /></label>
+                    <label>To<br><input type="date" name="dz_to" /></label>
+                    <button class="button button-secondary" type="submit" name="fmt" value="csv">Export Pretty Links CSV</button>
+                    <button class="button" type="submit" name="fmt" value="json">Export Pretty Links JSON</button>
+                </form>
+                <div style="align-self:center; color:#8a1f1f;">Download filtered backups before deleting.</div>
+            </div>
+
+            <div style="margin:6px 0 12px 0;">
+                <form method="post" onsubmit="return (confirm('Delete link clicks in the selected date range? This cannot be undone.'))" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
+                    <?php wp_nonce_field('ls_delete_link_clicks_range','ls_delete_link_clicks_range_nonce'); ?>
+                    <label>Delete Link Clicks From<br><input type="date" name="dz_from" required /></label>
+                    <label>To<br><input type="date" name="dz_to" required /></label>
+                    <button type="submit" name="ls_delete_link_clicks_range" value="1" class="button" style="background:#f0b429; border-color:#f0b429; color:#1d2327;">Delete Link Clicks in Range</button>
+                </form>
+            </div>
+            <label style="display:flex; align-items:center; gap:8px; margin:8px 0; color:#8a1f1f;">
+                <input type="checkbox" id="ls-confirm-links-flush" />
+                <span>I understand this will permanently remove Pretty Links and/or their click history from the database.</span>
+            </label>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <form method="post" onsubmit="return (document.getElementById('ls-confirm-links-flush')?.checked && confirm('This will permanently delete ALL Pretty Link click rows. Continue?'));">
+                    <?php wp_nonce_field('ls_flush_link_clicks','ls_flush_link_clicks_nonce'); ?>
+                    <button type="submit" name="ls_flush_link_clicks" value="1" class="button" style="background:#d63638; border-color:#d63638; color:#fff;" id="ls-btn-links-flush-clicks" disabled>Delete All Link Clicks</button>
+                </form>
+                <form method="post" onsubmit="return (document.getElementById('ls-confirm-links-flush')?.checked && confirm('This will permanently delete ALL Pretty Links (slugs). Clicks tied to links will be deleted via cascade. Continue?'));">
+                    <?php wp_nonce_field('ls_flush_links','ls_flush_links_nonce'); ?>
+                    <button type="submit" name="ls_flush_links" value="1" class="button" style="background:#8a1f1f; border-color:#8a1f1f; color:#fff;" id="ls-btn-links-flush-links" disabled>Delete All Pretty Links</button>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
         <?php
     }
 

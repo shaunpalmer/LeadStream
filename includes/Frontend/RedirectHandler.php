@@ -29,6 +29,7 @@ class RedirectHandler {
    */
   public static function add_query_var( $vars ) {
     $vars[] = 'ls_link';
+  $vars[] = 'ls_s';
     return $vars;
   }
 
@@ -42,6 +43,12 @@ class RedirectHandler {
       'index.php?ls_link=$matches[1]',
       'top'
     );
+    // Short code route: /s/{code}
+    add_rewrite_rule(
+      '^s/([^/]+)/?$',
+      'index.php?ls_s=$matches[1]',
+      'top'
+    );
   }
 
   /**
@@ -49,20 +56,31 @@ class RedirectHandler {
    */
   public static function maybe_redirect() {
     $slug = get_query_var( 'ls_link' );
-    if ( empty( $slug ) ) {
-      return;
-    }
+    $short = get_query_var( 'ls_s' );
+    if ( empty( $slug ) && empty($short) ) { return; }
 
     global $wpdb;
 
-    // Fetch link record
+    // Fetch link record by slug or by short code -> id
     $table = $wpdb->prefix . 'ls_links';
-  $link  = $wpdb->get_row(
-      $wpdb->prepare(
-    "SELECT id, target_url, COALESCE(redirect_type, '301') as redirect_type FROM {$table} WHERE slug = %s LIMIT 1",
-        $slug
-      )
-    );
+    if (!empty($short)) {
+      $id = \LS\Utils::base62_decode($short);
+      if ($id > 0) {
+        $link = $wpdb->get_row($wpdb->prepare(
+          "SELECT id, target_url, COALESCE(redirect_type, '301') as redirect_type FROM {$table} WHERE id = %d LIMIT 1",
+          $id
+        ));
+      } else {
+        $link = null;
+      }
+    } else {
+      $link  = $wpdb->get_row(
+        $wpdb->prepare(
+          "SELECT id, target_url, COALESCE(redirect_type, '301') as redirect_type FROM {$table} WHERE slug = %s LIMIT 1",
+          $slug
+        )
+      );
+    }
 
     if ( ! $link ) {
       // No matching slug—let WP handle 404 normally

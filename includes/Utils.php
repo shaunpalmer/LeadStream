@@ -104,4 +104,32 @@ class Utils {
     public static function get_plugin_path() {
         return dirname(dirname(__DIR__));
     }
+
+    /**
+     * Base62 encode/decode helpers for compact IDs (for short URLs)
+     */
+    public static function base62_encode($number) {
+        $alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $base = strlen($alphabet);
+        $n = intval($number);
+        if ($n <= 0) { return '0'; }
+        $out = '';
+        while ($n > 0) {
+            $out = $alphabet[$n % $base] . $out;
+            $n = intdiv($n, $base);
+        }
+        return $out;
+    }
+
+    public static function base62_decode($str) {
+        $alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $base = strlen($alphabet);
+        $s = (string)$str; $len = strlen($s); $n = 0;
+        for ($i = 0; $i < $len; $i++) {
+            $pos = strpos($alphabet, $s[$i]);
+            if ($pos === false) { return 0; }
+            $n = $n * $base + $pos;
+        }
+        return $n;
+    }
 }

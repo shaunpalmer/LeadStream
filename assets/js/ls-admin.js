@@ -146,6 +146,29 @@
     $phoneWrap.on('input change', 'form.js-phone-filters input, form.js-phone-filters select', function () {
       clearTimeout(t2); var f = this.form; t2 = setTimeout(function () { $(f).trigger('submit'); }, 400);
     });
+    // Quick chips
+    $phoneWrap.on('click', '.ls-quick-chips .ls-chip', function () {
+      var chip = $(this).data('chip');
+      var f = $phoneWrap.find('form.js-phone-filters')[0];
+      if (!f) return;
+      var now = new Date();
+      function fmt(d) { return d.toISOString().slice(0, 10); }
+      var from = '', to = '';
+      if (chip === 'p_today') {
+        from = fmt(now); to = fmt(now);
+      } else if (chip === 'p_last7') {
+        var d = new Date(now); d.setDate(d.getDate() - 6); // include today
+        from = fmt(d); to = fmt(now);
+      } else if (chip === 'p_month') {
+        var d2 = new Date(now.getFullYear(), now.getMonth(), 1);
+        from = fmt(d2); to = fmt(now);
+      }
+      $(f).find('input[name="from"]').val(from);
+      $(f).find('input[name="to"]').val(to);
+      // reset page
+      $(f).find('input[name="p"]').val('1');
+      $(f).trigger('submit');
+    });
     // Pagination
     $phoneWrap.on('click', '.tablenav-pages a.page-numbers, a.js-paginate', function (e) {
       e.preventDefault();
@@ -162,4 +185,115 @@
     // History nav
     window.addEventListener('popstate', function (e) { if (e.state) pload(e.state); });
   }
+
+  // AJAXify Calls Outcomes table
+  var $callsWrap = $('#ls-call-outcomes.ls-call-outcomes');
+  if ($callsWrap.length) {
+    function setCallsLoading(on) { $callsWrap.toggleClass('is-loading', !!on); }
+    function cload(args) {
+      setCallsLoading(true);
+      return $.post(LSAjax.ajaxurl, $.extend({ action: 'ls_calls_table', nonce: LSAjax.nonce }, args || {}))
+        .done(function (res) {
+          if (res && res.success && res.data && res.data.html) {
+            $callsWrap.find('table.widefat, .tablenav').remove();
+            $callsWrap.append(res.data.html);
+            if (res.data.url) history.pushState(args || {}, '', res.data.url);
+            $callsWrap.find('a,button,input,select,textarea').filter(':visible:first').trigger('focus');
+            try { document.dispatchEvent(new CustomEvent('ls:phone:loaded', { detail: { root: $callsWrap[0] } })); } catch (e) { }
+          }
+        })
+        .always(function () { setCallsLoading(false); });
+    }
+    $callsWrap.on('submit', 'form.js-calls-filters', function (e) {
+      e.preventDefault();
+      var data = $(this).serializeArray().reduce(function (o, i) { o[i.name] = i.value; return o; }, {});
+      data.c_p = 1;
+      cload(data);
+    });
+    var t3;
+    $callsWrap.on('input change', 'form.js-calls-filters input, form.js-calls-filters select', function () {
+      clearTimeout(t3); var f = this.form; t3 = setTimeout(function () { $(f).trigger('submit'); }, 400);
+    });
+    // Quick chips
+    $callsWrap.on('click', '.ls-quick-chips .ls-chip', function () {
+      var chip = $(this).data('chip');
+      var f = $callsWrap.find('form.js-calls-filters')[0];
+      if (!f) return;
+      // Reset selects
+      $(f).find('select[name="c_status"]').val('');
+      // Set group param
+      var group = '';
+      if (chip === 'c_missed') group = 'missed';
+      if (chip === 'c_answered') group = 'answered';
+      $(f).find('input[name="c_group"]').val(group);
+      if (chip === 'c_last7') {
+        var now = new Date(); var d = new Date(now); d.setDate(d.getDate() - 6);
+        var fmt = function (dt) { return dt.toISOString().slice(0, 10); };
+        $(f).find('input[name="c_from"]').val(fmt(d));
+        $(f).find('input[name="c_to"]').val(fmt(now));
+      }
+      // reset page
+      $(f).find('input[name="c_p"]').val('1');
+      $(f).trigger('submit');
+    });
+    $callsWrap.on('click', '.tablenav-pages a.page-numbers, a.js-paginate', function (e) {
+      e.preventDefault();
+      var args = $(this).data('args');
+      if (!args) { try { var u = new URL($(this).attr('href') || '', window.location.origin); args = Object.fromEntries(u.searchParams.entries()); } catch (e) { } }
+      args = args || {};
+      var keep = ['c_from', 'c_to', 'c_status', 'c_provider', 'c_fromnum', 'c_tonum', 'c_pp', 'c_p'];
+      var clean = {}; keep.forEach(function (k) { if (args[k] != null) clean[k] = args[k]; });
+      if (!clean.c_p) clean.c_p = 1;
+      cload(clean);
+    });
+    window.addEventListener('popstate', function (e) { if (e.state) cload(e.state); });
+  }
+
+  // Danger Zone enable/disable buttons
+  $(function () {
+    var $chkPhone = $('#ls-confirm-phone-flush');
+    var $btnPhone = $('#ls-btn-phone-flush');
+    if ($chkPhone.length && $btnPhone.length) {
+      $chkPhone.on('change', function () { $btnPhone.prop('disabled', !this.checked); });
+      $btnPhone.prop('disabled', !$chkPhone.prop('checked'));
+    }
+    var $chkLinks = $('#ls-confirm-links-flush');
+    var $btnClicks = $('#ls-btn-links-flush-clicks');
+    var $btnLinks = $('#ls-btn-links-flush-links');
+    if ($chkLinks.length) {
+      function sync() { var on = $chkLinks.prop('checked'); $btnClicks && $btnClicks.prop('disabled', !on); $btnLinks && $btnLinks.prop('disabled', !on); }
+      $chkLinks.on('change', sync); sync();
+    }
+  });
+
+  // Soft confirm for range deletes: does a lightweight COUNT via AJAX before confirming
+  window.LSConfirmRange = function (form, kind) {
+    try {
+      var from = $(form).find('input[name="dz_from"]').val();
+      var to = $(form).find('input[name="dz_to"]').val();
+      if (!from || !to) return false; // block submit if missing
+      var $btn = $(form).find('button[type="submit"]');
+      var old = $btn.text();
+      $btn.prop('disabled', true).text('Counting…');
+      $.post(LSAjax.ajaxurl, { action: 'ls_count_range', nonce: LSAjax.nonce, kind: kind, from: from, to: to })
+        .done(function (res) {
+          var n = res && res.success && res.data && typeof res.data.count === 'number' ? res.data.count : 0;
+          var msg = 'About to delete ' + n + ' ' + (kind === 'link' ? 'link click' : 'phone click') + (n === 1 ? '' : 's') + ' between ' + from + ' and ' + to + '. Continue?';
+          if (confirm(msg)) { form.submit(); }
+        })
+        .always(function () { $btn.prop('disabled', false).text(old); });
+      return false; // always prevent default; we submit manually if confirmed
+    } catch (e) {
+      return confirm('Proceed with deletion?');
+    }
+  };
+
+  // Nice UX for export buttons: disable while navigating and show a toast hint
+  $(document).on('click', 'form[method="get"] button[name="fmt"]', function () {
+    var $btn = $(this);
+    var old = $btn.text();
+    $btn.prop('disabled', true).text('Preparing…');
+    setTimeout(function () { $btn.prop('disabled', false).text(old); }, 2000);
+    toast('Export starting… You may continue using the page.');
+  });
 })(jQuery);

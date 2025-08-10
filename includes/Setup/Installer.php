@@ -115,10 +115,34 @@ class Installer {
 
         $result1 = dbDelta( $sql_links );
         $result2 = dbDelta( $sql_clicks );
+        // Calls table for provider webhooks (Twilio/Telnyx/etc.)
+        $sql_calls = "
+            CREATE TABLE {$wpdb->prefix}ls_calls (
+                id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                provider          VARCHAR(64) NOT NULL DEFAULT '',
+                provider_call_id  VARCHAR(191) NOT NULL,
+                from_number       VARCHAR(64) NOT NULL DEFAULT '',
+                to_number         VARCHAR(64) NOT NULL DEFAULT '',
+                status            VARCHAR(32) NOT NULL DEFAULT '',
+                start_time        DATETIME NULL,
+                end_time          DATETIME NULL,
+                duration          INT UNSIGNED NOT NULL DEFAULT 0,
+                recording_url     TEXT,
+                click_id          BIGINT UNSIGNED NULL,
+                meta_data         LONGTEXT NULL,
+                created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY provider_call (provider_call_id),
+                KEY status_idx (status),
+                KEY start_idx (start_time)
+            ) $charset_collate;
+        ";
+        $result3 = dbDelta( $sql_calls );
         
         if (defined('WP_DEBUG') && WP_DEBUG) {
             error_log('LeadStream: dbDelta results - Links: ' . print_r($result1, true));
             error_log('LeadStream: dbDelta results - Clicks: ' . print_r($result2, true));
+            error_log('LeadStream: dbDelta results - Calls: ' . print_r($result3, true));
         }
     }
 
@@ -217,7 +241,9 @@ class Installer {
      * Flush rewrite rules to ensure our /l/slug pattern works.
      */
     private static function flush_rewrite_rules() {
-        flush_rewrite_rules();
+    // Ensure rewrite rules for both /l/{slug} and /s/{code} are registered
+    \LS\Frontend\RedirectHandler::add_rewrite_rule();
+    flush_rewrite_rules();
     }
 }
 
