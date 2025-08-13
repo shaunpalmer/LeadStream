@@ -1,8 +1,11 @@
-.ls-callbar{position:fixed;left:0;right:0;z-index:99999;background:#1d2327;color:#fff;box-shadow:0 -2px 12px rgba(0,0,0,.25);display:flex;justify-content:center}
-.ls-callbar--top{top:0;box-shadow:0 2px 12px rgba(0,0,0,.25)}
+.ls-callbar{position:fixed;left:0;right:0;z-index:9999;padding:10px 12px;background:#000;display:flex;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.ls-callbar--align-left{justify-content:flex-start}
+.ls-callbar--align-center{justify-content:center}
+.ls-callbar--align-right{justify-content:flex-end}
+.ls-callbar--top{top:0}
 .ls-callbar--bottom{bottom:0}
-.ls-callbar__btn{display:flex;gap:10px;align-items:center;justify-content:center;padding:12px 16px;color:#fff;text-decoration:none;font-weight:600;width:100%}
-.ls-callbar__btn:hover{background:#000}
-.ls-callbar__cta{font-size:16px}
-.ls-callbar__num{font-family:monospace;background:rgba(255,255,255,.1);padding:2px 6px;border-radius:4px}
-@media(min-width:783px){.ls-callbar{display:none}}
+.ls-callbar__btn{display:inline-flex;gap:10px;align-items:center;font-weight:700;text-decoration:none;background:#ffce00;color:#000;border-radius:999px;padding:12px 18px;border:1px solid #111;transition:background 0.2s,color 0.2s;cursor:pointer}
+.ls-callbar__btn:hover{background:#fff200;color:#111}
+.ls-callbar__cta{line-height:1;max-width:52vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ls-callbar__num{line-height:1;background:#fff;color:#000;border-radius:6px;padding:6px 8px;max-width:36vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(min-width:783px){.ls-callbar{position:static;display:none}}

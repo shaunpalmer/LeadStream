@@ -175,11 +175,14 @@ JS;
             return;
         }
         
+        // Ensure Dashicons are available for core-like pagination icons
+        wp_enqueue_style('dashicons');
+
         wp_enqueue_style(
             'leadstream-admin-css',
             plugin_dir_url(dirname(dirname(__FILE__))) . 'assets/css/leadstream-admin.css',
             ['wp-admin'],
-            '2.5.6'
+            '2.5.7'
         );
         
         // Add CodeMirror styling that works with both WP and CDN versions
@@ -226,6 +229,12 @@ JS;
             'ajaxurl' => admin_url('admin-ajax.php'),
             'nonce'   => wp_create_nonce('ls-admin')
         ]);
+
+    // WordPress native color picker for appearance fields
+    wp_enqueue_style('wp-color-picker');
+    wp_enqueue_script('wp-color-picker');
+    $initColorPicker = 'jQuery(function($){ try { $(".ls-color").wpColorPicker && $(".ls-color").wpColorPicker(); } catch(e){} });';
+    wp_add_inline_script('wp-color-picker', $initColorPicker);
 
                 // Datepicker: Flatpickr (reliable, small). Applies to inputs on Pretty Links & Phone filters
                 wp_enqueue_style(
@@ -701,12 +710,27 @@ JS;
         // Get phone selectors
         $phone_selectors = get_option('leadstream_phone_selectors', '');
         
-        // Get GA4 ID if available
-        $ga_id = get_option('leadstream_gtm_id', ''); // You might want to add a dedicated GA4 ID option
+        // Get GA4 ID if available (using GTM container id option for now)
+        $ga_id = get_option('leadstream_gtm_id', '');
+
+        // Build alternate dialing variants for matching (national/E.164).
+        // We do NOT change what visitors dial; this is only to improve tracking matches.
+        $default_cc = (string) apply_filters('leadstream_default_country_code', (string) get_option('leadstream_default_country_code', '1'));
+        $alt_numbers = [];
+        foreach ((array) $phone_numbers as $n) {
+            $digits = preg_replace('/\D+/', '', (string) $n);
+            if ($digits === '') { continue; }
+            // E.164-ish with country code
+            $alt_numbers[] = $default_cc . ltrim($digits, '0');
+            // National form (keep a single leading 0 if present in source)
+            $alt_numbers[] = (strpos((string) $n, '0') === 0) ? ('0' . ltrim($digits, '0')) : $digits;
+        }
+        $alt_numbers = array_values(array_unique(array_filter($alt_numbers)));
         
-        wp_localize_script('leadstream-phone-tracking', 'LeadStreamPhone', [
+                wp_localize_script('leadstream-phone-tracking', 'LeadStreamPhone', [
             'ajax_url' => admin_url('admin-ajax.php'),
             'numbers' => $phone_numbers,
+            'altNumbers' => $alt_numbers,
             'selectors' => $phone_selectors,
             'nonce' => wp_create_nonce('leadstream_phone_click'),
             'ga_id' => $ga_id,
@@ -714,33 +738,29 @@ JS;
             'show_feedback' => true
         ]);
 
-        // Sticky Call Bar assets
-        $callbar_enabled = (int) get_option('leadstream_callbar_enabled', 0);
-        if ($callbar_enabled) {
-            wp_enqueue_style(
-                'leadstream-callbar-css',
-                plugin_dir_url(dirname(__DIR__)) . 'assets/css/leadstream-callbar.css',
-                [],
-                '1.0.0'
-            );
-            wp_enqueue_script(
-                'leadstream-callbar-js',
-                plugin_dir_url(dirname(__DIR__)) . 'assets/js/leadstream-callbar.js',
-                [],
-                '1.0.0',
-                true
-            );
-            $dni_rules_text = (string) get_option('leadstream_dni_rules', '');
-            wp_localize_script('leadstream-callbar-js', 'LeadStreamCallBar', [
-                'enabled' => true,
-                'defaultNumber' => (string) get_option('leadstream_callbar_default', ''),
-                'cta' => (string) get_option('leadstream_callbar_cta', 'Call Now'),
-                'position' => (string) get_option('leadstream_callbar_position', 'bottom'),
-                'mobileOnly' => (bool) get_option('leadstream_callbar_mobile_only', 1),
-                'dniRules' => $dni_rules_text,
-                'ajaxUrl' => admin_url('admin-ajax.php'),
-                'nonce' => wp_create_nonce('leadstream_phone_click'),
-            ]);
-        }
-    }
+                // TEMP: callbar assets are enqueued by LS_Callbar::enqueue to avoid double-binding.
+                // See hotfix/phone-tracking-baseline.
+                // The previous duplicate enqueue/localize for leadstream-callbar.js has been commented out intentionally.
+
+                // Admin-only smoke test helper (dev-only)
+                if (current_user_can('manage_options')) {
+                    $smoke = <<<'JS'
+window.__LS_SMOKE__ = function(){
+    try {
+        var n = (window.LeadStreamPhone && LeadStreamPhone.nonce) || (window.LeadStreamCallBarData && LeadStreamCallBarData.nonce) || '';
+        var fd = new FormData();
+        fd.append('action','leadstream_record_phone_click');
+        fd.append('nonce', n);
+        fd.append('phone','0220601100');
+        fd.append('original_phone','022 060 11 00');
+        fd.append('origin','callbar');
+        fd.append('page_url', location.href);
+        fd.append('page_title', document.title);
+        return fetch((window.ajaxurl||'')|| (LeadStreamPhone && LeadStreamPhone.ajax_url) || (window.LeadStreamCallBar && LeadStreamCallBar.ajaxUrl) || '/wp-admin/admin-ajax.php', { method:'POST', body: fd }).then(function(r){ return r.json(); }).then(function(j){ console.log('LS smoke:', j); return j; });
+    } catch(e){ console.warn('LS smoke error', e); return Promise.reject(e); }
+};
+JS;
+                    wp_add_inline_script('leadstream-phone-tracking', $smoke);
+                }
+            }
 }

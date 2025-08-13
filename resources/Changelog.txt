@@ -1,4 +1,14 @@
 Changelog
+## 2.12.1 - ADMIN PAGINATION ICONS + DASHICONS ✅
+FIXES:
+- FIXED: Invisible Prev/Next/First/Last icons in LeadStream admin pagination when pseudo-elements were reset by CSS. Restored dashicons :before icons and ensured visibility across admin color schemes.
+- FIXED: Disabled buttons now render grey icons instead of blank boxes; numeric + arrow links are consistent in Phone and Call Outcomes tables.
+
+UPGRADES:
+- ADDED: Explicit Dashicons enqueue on the LeadStream settings page to guarantee the icon font is present.
+- COMPAT: Suppressed duplicate Unicode ::after icons where applicable to avoid double arrows.
+- A11Y: Kept screen-reader labels (First/Previous/Next/Last) within links for assistive tech.
+
 ## 2.11.0 - ADMIN DATEPICKER + PRETTY LINKS ACCORDION UX 🎯
 UPGRADES:
 - ADDED: Calendar datepicker (Flatpickr) for From/To filters on Pretty Links and Phone tabs
@@ -323,4 +333,14 @@ Enhancements:
 
 ## 1.0.0
 - Initial release: Basic features and security.
+
+
+## 2.12.0 - MOBILE CALL BAR: ALIGNMENT + SHORTCODE UX
+UPGRADES:
+- ADDED: Button alignment (Left / Center / Right) with live preview
+- ADDED: Shortcode attribute align="left|center|right"
+- ENHANCED: Shortcode placement suppresses auto-inject on that page
+- ENHANCED: Duplicate prevention when shortcode appears multiple times
+- POLISH: Inline help paragraph showing three alignment shortcode examples
+- DEFAULT: Kept mobile-only behavior for call bar (desktop disabled by default)
 

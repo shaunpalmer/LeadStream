@@ -1,5 +1,16 @@
 (function () {
   'use strict';
+  // Beacon helper with fetch fallback
+  function lsSend(url, fd) {
+    try {
+      if (navigator.sendBeacon) {
+        var params = new URLSearchParams();
+        fd.forEach(function (v, k) { params.append(k, v); });
+        return navigator.sendBeacon(url, params);
+      }
+    } catch (e) { /* fall through */ }
+    return fetch(url, { method: 'POST', body: fd });
+  }
 
   // Exit if no phone numbers to track
   if (!LeadStreamPhone || !LeadStreamPhone.numbers || !LeadStreamPhone.numbers.length) {
@@ -12,8 +23,10 @@
    * Optional CSS selectors for enhanced accuracy when needed
    */
 
-  // Get normalized phone numbers (digits only) from settings
-  const trackedNumbers = LeadStreamPhone.numbers.map(num => num.replace(/\D/g, ''));
+  // Get normalized phone numbers (digits only) from settings for matching only
+  const trackedNumbers = (LeadStreamPhone.numbers || []).map(num => String(num).replace(/\D/g, ''));
+  // Optional alternate variants (national vs E.164) provided by PHP for better matching
+  const altNumbers = (LeadStreamPhone.altNumbers || []).map(num => String(num).replace(/\D/g, ''));
   const customSelectors = LeadStreamPhone.selectors ?
     LeadStreamPhone.selectors.split('\n').filter(s => s.trim()) : [];
 
@@ -21,17 +34,30 @@
    * Check if a phone number matches our tracked numbers
    */
   function isTrackedNumber(phoneString) {
-    const normalized = phoneString.replace(/\D/g, ''); // Strip to digits only
-    return trackedNumbers.some(tracked =>
-      normalized.includes(tracked) || tracked.includes(normalized)
-    );
+    const normalized = String(phoneString).replace(/\D/g, ''); // digits only for compare
+    const haystacks = trackedNumbers.concat(altNumbers);
+
+    const lastN = (s, n) => (s.length >= n ? s.slice(-n) : s);
+    const last7 = lastN(normalized, 7);
+    const last8 = lastN(normalized, 8);
+
+    return haystacks.some(tracked => {
+      if (!tracked) return false;
+      if (normalized === tracked) return true;
+      // Mutual containment (legacy)
+      if (normalized.includes(tracked) || tracked.includes(normalized)) return true;
+      // Trailing digit match (handles national vs international variants)
+      const t7 = lastN(tracked, 7);
+      const t8 = lastN(tracked, 8);
+      return (last7 && t7 && last7 === t7) || (last8 && t8 && last8 === t8);
+    });
   }
 
   /**
    * Send phone click to analytics and database
    */
   function recordPhoneClick(phoneNumber, element) {
-    const normalizedPhone = phoneNumber.replace(/\D/g, '');
+    const normalizedPhone = String(phoneNumber).replace(/\D/g, '');
 
     // 1) Send to Google Analytics (GA4) if available
     if (window.gtag && LeadStreamPhone.ga_id) {
@@ -55,10 +81,8 @@
     formData.append('page_title', document.title);
     formData.append('nonce', LeadStreamPhone.nonce);
 
-    fetch(LeadStreamPhone.ajax_url, {
-      method: 'POST',
-      body: formData
-    }).catch(error => {
+    // Prefer sendBeacon to avoid navigation drop; fallback to fetch
+    lsSend(LeadStreamPhone.ajax_url, formData).catch(error => {
       console.warn('LeadStream: Failed to record phone click:', error);
     });
 
@@ -81,6 +105,8 @@
       // Only track if this number is in our configuration
       if (isTrackedNumber(phoneNumber)) {
         element.addEventListener('click', () => {
+          // Tag origin for consistency
+          element.setAttribute('data-ls-origin', 'tel');
           recordPhoneClick(phoneNumber, element);
         });
 
@@ -114,6 +140,7 @@
 
           if (phoneNumber && isTrackedNumber(phoneNumber)) {
             element.addEventListener('click', () => {
+              element.setAttribute('data-ls-origin', 'tel');
               recordPhoneClick(phoneNumber, element);
             });
 

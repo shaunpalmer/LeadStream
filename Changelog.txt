@@ -1,10 +1,8 @@
-## 2.12.0 - QR logo polish + tiny LS badge (free)
-- QR modal: logo size slider (8–20%) with default 16%, knockout padding, ECC auto-bump, hiDPI export, strict quiet-zone on PNG/pop-out, and 7:1 contrast warning.
-- Print guard: ensures module ≥ 4 px at 1024 print size; exports remain tack-sharp.
-- UI polish: color pickers, hints, and safer defaults; filename and pop-out improvements.
-- Added 10px LS dot in footer for free installs (tooltip + noscript). Paid stubs disable it via constant/filter/option.
-- Settings: grayed-out LS badge toggle placeholder; auto-enables on paid.
-- Misc: centered badge on mobile; placement resilient near edges.
+## 2.12.1 - Admin Pagination Icons + Dashicons
+- FIXED: Prev/Next/First/Last pagination icons in LeadStream admin tables could appear invisible when pseudo-elements were reset. Restored dashicon-based :before icons and ensured visibility across admin color schemes.
+- ADDED: Explicit Dashicons enqueue on the LeadStream settings page to guarantee icon font availability.
+- POLISH: Disabled pager buttons now show appropriate (grey) icons; numeric and arrow links look consistent for Phone and Call Outcomes tables.
+- COMPAT: Prevented duplicate icons by scoping/removing prior Unicode ::after arrows where needed; kept screen-reader labels intact for accessibility.
 
 ## 2.11.0 - Admin Datepicker + Pretty Links Accordion UX
 - ADDED: Calendar datepicker (Flatpickr) for all From/To filters on Pretty Links and Phone tabs
@@ -18,4 +16,13 @@
 - CSV export of current view (secure admin-post with nonce)
 - New Redirect column and defensive defaulting for legacy data
 - Fixed wpdb::prepare warnings (prepare only when placeholders exist)
+
+
+## 2.12.0 - Mobile Call Bar: Alignment + Shortcode UX
+- ADDED: Button alignment (Left/Center/Right) with live admin preview
+- ADDED: Alignment shortcode attribute `align="left|center|right"`
+- ENHANCED: Shortcode now takes precedence over auto-inject on pages where it’s used
+- ENHANCED: Prevent multiple Call Bars when shortcode is inserted more than once
+- POLISH: Inline help paragraph with three shortcode examples inside the Call Bar settings
+- DEFAULT: Mobile-only behavior retained; desktop remains off by default
 
