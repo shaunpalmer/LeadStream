@@ -762,5 +762,5 @@ window.__LS_SMOKE__ = function(){
 JS;
                     wp_add_inline_script('leadstream-phone-tracking', $smoke);
                 }
-            }
-}
+        }
+    }

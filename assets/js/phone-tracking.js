@@ -58,6 +58,7 @@
    */
   function recordPhoneClick(phoneNumber, element) {
     const normalizedPhone = String(phoneNumber).replace(/\D/g, '');
+    const origin = (element && element.getAttribute && element.getAttribute('data-ls-origin')) || 'tel';
 
     // 1) Send to Google Analytics (GA4) if available
     if (window.gtag && LeadStreamPhone.ga_id) {
@@ -80,6 +81,7 @@
     formData.append('page_url', window.location.href);
     formData.append('page_title', document.title);
     formData.append('nonce', LeadStreamPhone.nonce);
+    formData.append('origin', origin);
 
     // Prefer sendBeacon to avoid navigation drop; fallback to fetch
     lsSend(LeadStreamPhone.ajax_url, formData).catch(error => {
