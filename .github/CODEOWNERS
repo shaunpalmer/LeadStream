@@ -1,0 +1,3 @@
+# Licensing infra requires @shaunpalmer review
+/includes/License/*    @shaunpalmer
+/leadstream-licserver/**    @shaunpalmer
