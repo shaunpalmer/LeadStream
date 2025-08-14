@@ -112,24 +112,11 @@ class Settings {
         if (empty($phone)) {
             return '';
         }
-        
-        // Strip all non-digits
-        $digits_only = preg_replace('/\D/', '', $phone);
-        
-        // Handle common US formats
-        if (strlen($digits_only) === 10) {
-            // 10 digits: assume US number, add country code
-            return '1' . $digits_only;
-        } elseif (strlen($digits_only) === 11 && substr($digits_only, 0, 1) === '1') {
-            // 11 digits starting with 1: already has US country code
-            return $digits_only;
-        } elseif (strlen($digits_only) >= 10) {
-            // International number: keep as-is if reasonable length
-            return $digits_only;
-        }
-        
-        // If less than 10 digits, probably not a valid phone number
-        return '';
+        // Tracking normalization: digits only, no automatic country code or truncation.
+        // Dialing/display is preserved elsewhere (e.g., Call Bar uses your exact input or '+').
+        $digits_only = preg_replace('/\D+/', '', (string) $phone);
+        // Allow custom strategies via filter if needed.
+        return apply_filters('leadstream_normalize_phone_digits', $digits_only, $phone);
     }
     
     /**
@@ -152,6 +139,12 @@ class Settings {
         ));
         register_setting('lead-tracking-js-settings-group', 'leadstream_gtm_id', array(
             'sanitize_callback' => 'sanitize_text_field'
+        ));
+        // Default calling country code used during phone normalization (digits only, e.g., "1" for US, "64" for NZ)
+        register_setting('lead-tracking-js-settings-group', 'leadstream_default_country_code', array(
+            'type' => 'string',
+            'default' => '1',
+            'sanitize_callback' => [__CLASS__, 'sanitize_country_code']
         ));
         // Stub setting: LS badge toggle (grayed out on free; auto-hidden on paid)
         register_setting('lead-tracking-js-settings-group', 'leadstream_enable_badge', array(
@@ -191,6 +184,15 @@ class Settings {
             'leadstream_gtm_id_field',
             'Google Tag Manager ID',
             [__CLASS__, 'gtm_id_field_callback'],
+            'lead-tracking-js-settings-group',
+            'lead-tracking-js-settings-section'
+        );
+
+        // Default calling country selector (shown in Injection Settings table)
+        add_settings_field(
+            'leadstream_default_country_code_field',
+            'Default Calling Country',
+            [__CLASS__, 'country_code_field_callback'],
             'lead-tracking-js-settings-group',
             'lead-tracking-js-settings-section'
         );
@@ -366,10 +368,26 @@ class Settings {
                 add_settings_error('leadstream_links', 'form_error', 'An error occurred while processing the form. Please try again.');
             }
         }
-        
+
+        // Resolve plugin logo URLs (1x + 2x) reliably from plugin root
+        if (defined('LS_FILE')) {
+            $ls_logo_url   = plugins_url('assets/Lead-stream-logo-Small.png', LS_FILE);
+            $ls_logo_2xurl = plugins_url('assets/icon-256x256.png', LS_FILE);
+        } else {
+            $base = dirname(dirname(__DIR__)) . '/leadstream-analytics-injector.php';
+            $ls_logo_url   = plugins_url('assets/Lead-stream-logo-Small.png', $base);
+            $ls_logo_2xurl = plugins_url('assets/icon-256x256.png', $base);
+        }
         ?>
         <div class="wrap">
-            <h1>LeadStream: Advanced Analytics Injector</h1>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+                <img src="<?php echo esc_url($ls_logo_url); ?>"
+                     srcset="<?php echo esc_url($ls_logo_2xurl); ?> 2x"
+                     alt="LeadStream Logo"
+                     width="36" height="36"
+                     style="width:36px; height:36px; border-radius:4px; object-fit:contain; flex-shrink:0;" />
+                <h1 style="margin:0; padding:0;">LeadStream: Advanced Analytics Injector</h1>
+            </div>
             
             <!-- Tab Navigation -->
             <nav class="nav-tab-wrapper">
@@ -712,22 +730,19 @@ class Settings {
                             if (current_user_can('manage_options')): ?>
         
         <!-- Import: Pretty Links (separate card) -->
-        <div style="margin-top: 18px; padding:16px; border:1px solid #ccd0d4; background:#fff; border-radius:6px;">
+    <details style="margin-top: 18px; padding:16px; border:1px solid #96d636ff; background:#fff; border-radius:6px;">
+        <summary style="padding:12px 16px;  background:#fff5f5; color:#000000; font-weight:600; cursor:pointer;">Import Zone: Import Pretty Links Data</summary>     
+        <div style="margin-top: 18px; padding:16px;color: #000;background:#fff5f5;">
             <h3 style="margin:0 0 6px 0;">Import: Pretty Links</h3>
             <p style="margin:6px 0 12px 0; color:#50575e;">Upload CSV backups exported from LeadStream. Use the Links form for slugs/targets and the Clicks form for click history.</p>
-            <form method="post" enctype="multipart/form-data" style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:10px;">
-                <?php wp_nonce_field('ls_import_links','ls_import_links_nonce'); ?>
-                <div><label>Pretty Links CSV<br><input type="file" name="ls_import_file_links" accept=".csv" required></label></div>
-                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" name="ls_import_truncate_links" value="1"> Truncate existing pretty links before import</label>
-                <button type="submit" name="ls_import_links" value="1" class="button">Import Pretty Links CSV</button>
-            </form>
-            <form method="post" enctype="multipart/form-data" style="display:flex; gap:10px; align-items:end; flex-wrap:wrap;">
+            <form method="post" enctype="multipart/form-data" style="display:flex; gap:10px;   align-items:end; flex-wrap:wrap;">
                 <?php wp_nonce_field('ls_import_link_clicks','ls_import_link_clicks_nonce'); ?>
                 <div><label>Link Clicks CSV<br><input type="file" name="ls_import_file" accept=".csv" required></label></div>
                 <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" name="ls_import_truncate" value="1"> Truncate existing link clicks before import</label>
                 <button type="submit" name="ls_import_link_clicks" value="1" class="button">Import Link Clicks CSV</button>
             </form>
         </div>
+      </details>
 
         <!-- Danger Zone: Pretty Links -->
         <details style="margin-top: 18px;" class="ls-acc" id="ls-dz-links">
@@ -977,6 +992,101 @@ class Settings {
         </table>
         <?php self::render_toggle_styles(); ?>
         <?php
+    }
+
+    /** Sanitize numeric country calling code (digits only). */
+    public static function sanitize_country_code($val) {
+        $val = is_scalar($val) ? (string) $val : '';
+        $val = preg_replace('/\D+/', '', $val ?? '');
+        return $val !== '' ? $val : '1';
+    }
+
+    /** Render the Default Calling Country dropdown (curated list; filterable). */
+    public static function country_code_field_callback() {
+        $current = (string) get_option('leadstream_default_country_code', '1');
+        $options = self::get_supported_calling_codes();
+        echo '<select id="leadstream_default_country_code" name="leadstream_default_country_code">';
+        foreach ($options as $opt) {
+            $code = esc_attr($opt['code']);
+            $label = esc_html($opt['label']);
+            $sel = ($current === (string) $opt['code']) ? ' selected' : '';
+            echo '<option value="' . $code . '"' . $sel . '>' . $label . '</option>';
+        }
+        echo '</select>';
+        echo '<p class="description">Used to normalize local phone numbers to international format. List covers OECD members and select high‑income regions. Filter: <code>leadstream_supported_calling_codes</code>.</p>';
+    }
+
+    /**
+     * Curated calling codes for common markets (OECD members + select high-income regions).
+     * Return value: array of [ 'code' => '64', 'label' => 'New Zealand (+64)' ]
+     */
+    private static function get_supported_calling_codes() {
+        $list = [
+            // North America
+            ['code' => '1',   'label' => 'United States (+1)'],
+            ['code' => '1',   'label' => 'Canada (+1)'],
+            ['code' => '52',  'label' => 'Mexico (+52)'],
+            // Europe (OECD)
+            ['code' => '43',  'label' => 'Austria (+43)'],
+            ['code' => '32',  'label' => 'Belgium (+32)'],
+            ['code' => '420', 'label' => 'Czech Republic (+420)'],
+            ['code' => '45',  'label' => 'Denmark (+45)'],
+            ['code' => '372', 'label' => 'Estonia (+372)'],
+            ['code' => '358', 'label' => 'Finland (+358)'],
+            ['code' => '33',  'label' => 'France (+33)'],
+            ['code' => '49',  'label' => 'Germany (+49)'],
+            ['code' => '30',  'label' => 'Greece (+30)'],
+            ['code' => '36',  'label' => 'Hungary (+36)'],
+            ['code' => '354', 'label' => 'Iceland (+354)'],
+            ['code' => '353', 'label' => 'Ireland (+353)'],
+            ['code' => '39',  'label' => 'Italy (+39)'],
+            ['code' => '371', 'label' => 'Latvia (+371)'],
+            ['code' => '370', 'label' => 'Lithuania (+370)'],
+            ['code' => '352', 'label' => 'Luxembourg (+352)'],
+            ['code' => '31',  'label' => 'Netherlands (+31)'],
+            ['code' => '47',  'label' => 'Norway (+47)'],
+            ['code' => '48',  'label' => 'Poland (+48)'],
+            ['code' => '351', 'label' => 'Portugal (+351)'],
+            ['code' => '421', 'label' => 'Slovakia (+421)'],
+            ['code' => '386', 'label' => 'Slovenia (+386)'],
+            ['code' => '34',  'label' => 'Spain (+34)'],
+            ['code' => '46',  'label' => 'Sweden (+46)'],
+            ['code' => '41',  'label' => 'Switzerland (+41)'],
+            ['code' => '44',  'label' => 'United Kingdom (+44)'],
+            // Asia-Pacific
+            ['code' => '61',  'label' => 'Australia (+61)'],
+            ['code' => '64',  'label' => 'New Zealand (+64)'],
+            ['code' => '81',  'label' => 'Japan (+81)'],
+            ['code' => '82',  'label' => 'South Korea (+82)'],
+            ['code' => '65',  'label' => 'Singapore (+65)'],
+            ['code' => '852', 'label' => 'Hong Kong (+852)'],
+            // Middle East
+            ['code' => '972', 'label' => 'Israel (+972)'],
+            ['code' => '971', 'label' => 'United Arab Emirates (+971)'],
+            ['code' => '90',  'label' => 'Turkey (+90)'],
+            // Latin America (OECD members)
+            ['code' => '56',  'label' => 'Chile (+56)'],
+            ['code' => '57',  'label' => 'Colombia (+57)'],
+            ['code' => '506', 'label' => 'Costa Rica (+506)'],
+        ];
+
+        /**
+         * Filter the supported calling codes list.
+         * @param array $list Array of [ 'code' => string, 'label' => string ]
+         */
+        $list = apply_filters('leadstream_supported_calling_codes', $list);
+
+        // Ensure unique and sanitized
+        $seen = [];
+        $out = [];
+        foreach ($list as $it) {
+            if (!is_array($it) || empty($it['code']) || empty($it['label'])) { continue; }
+            $key = $it['code'] . '|' . $it['label'];
+            if (isset($seen[$key])) { continue; }
+            $seen[$key] = true;
+            $out[] = [ 'code' => (string) preg_replace('/\D+/', '', (string) $it['code']), 'label' => (string) $it['label'] ];
+        }
+        return $out;
     }
     
     /**
@@ -1675,13 +1785,54 @@ document.addEventListener('wpformsSubmit', function (event) {
             $callbar_enabled = isset($_POST['leadstream_callbar_enabled']) ? 1 : 0;
             update_option('leadstream_callbar_enabled', $callbar_enabled);
             $callbar_default = sanitize_text_field($_POST['leadstream_callbar_default'] ?? '');
+            // Trim to 24 chars server-side
+            if (strlen($callbar_default) > 24) { $callbar_default = substr($callbar_default, 0, 24); }
             update_option('leadstream_callbar_default', $callbar_default);
             $callbar_mobile_only = isset($_POST['leadstream_callbar_mobile_only']) ? 1 : 0;
             update_option('leadstream_callbar_mobile_only', $callbar_mobile_only);
             $callbar_position = in_array(($_POST['leadstream_callbar_position'] ?? 'bottom'), ['top','bottom'], true) ? $_POST['leadstream_callbar_position'] : 'bottom';
             update_option('leadstream_callbar_position', $callbar_position);
+            $callbar_align = in_array(($_POST['leadstream_callbar_align'] ?? 'center'), ['left','center','right'], true) ? $_POST['leadstream_callbar_align'] : 'center';
+            update_option('leadstream_callbar_align', $callbar_align);
             $callbar_cta = sanitize_text_field($_POST['leadstream_callbar_cta'] ?? 'Call Now');
+            if (strlen($callbar_cta) > 60) { $callbar_cta = substr($callbar_cta, 0, 60); }
             update_option('leadstream_callbar_cta', $callbar_cta);
+
+            // Save Default Calling Country (from phone tab)
+            if (isset($_POST['leadstream_default_country_code'])) {
+                $cc = self::sanitize_country_code($_POST['leadstream_default_country_code']);
+                update_option('leadstream_default_country_code', $cc);
+            }
+
+            // Call Bar appearance options
+            if (function_exists('sanitize_hex_color')) {
+                $cb_bg         = sanitize_hex_color($_POST['leadstream_callbar_bg'] ?? '#000000');
+                $cb_btn_bg     = sanitize_hex_color($_POST['leadstream_callbar_btn_bg'] ?? '#ffce00');
+                $cb_btn_text   = sanitize_hex_color($_POST['leadstream_callbar_btn_text'] ?? '#000000');
+                $cb_hover_bg   = sanitize_hex_color($_POST['leadstream_callbar_hover_bg'] ?? '#fff200');
+                $cb_hover_text = sanitize_hex_color($_POST['leadstream_callbar_hover_text'] ?? '#111111');
+                // Pick a complementary default border color (dark goldenrod)
+                $cb_border     = sanitize_hex_color($_POST['leadstream_callbar_border'] ?? '#b8860b');
+            } else {
+                $cb_bg = $cb_btn_bg = $cb_btn_text = $cb_hover_bg = $cb_hover_text = $cb_border = '';
+            }
+            update_option('leadstream_callbar_bg', $cb_bg ?: '#000000');
+            update_option('leadstream_callbar_btn_bg', $cb_btn_bg ?: '#ffce00');
+            update_option('leadstream_callbar_btn_text', $cb_btn_text ?: '#000000');
+            update_option('leadstream_callbar_hover_bg', $cb_hover_bg ?: '#fff200');
+            update_option('leadstream_callbar_hover_text', $cb_hover_text ?: '#111111');
+            update_option('leadstream_callbar_border', $cb_border ?: '#b8860b');
+
+            // Font size (accept numeric => rem)
+            $cb_font_size = sanitize_text_field($_POST['leadstream_callbar_font_size'] ?? '1rem');
+            update_option('leadstream_callbar_font_size', $cb_font_size);
+
+            // Border width and radius
+            $bw_raw = sanitize_text_field($_POST['leadstream_callbar_border_width'] ?? '1');
+            $bw_val = preg_match('/^\d+$/', $bw_raw) ? ($bw_raw . 'px') : $bw_raw;
+            update_option('leadstream_callbar_border_width', $bw_val);
+            $cb_radius = sanitize_text_field($_POST['leadstream_callbar_radius'] ?? '999px');
+            update_option('leadstream_callbar_radius', $cb_radius);
             $dni_rules_text = sanitize_textarea_field($_POST['leadstream_dni_rules'] ?? '');
             update_option('leadstream_dni_rules', $dni_rules_text);
 
@@ -1730,7 +1881,18 @@ document.addEventListener('wpformsSubmit', function (event) {
     $callbar_default = (string) get_option('leadstream_callbar_default', '');
     $callbar_mobile_only = (int) get_option('leadstream_callbar_mobile_only', 1);
     $callbar_position = (string) get_option('leadstream_callbar_position', 'bottom');
+    $callbar_align   = (string) get_option('leadstream_callbar_align', 'center');
     $callbar_cta = (string) get_option('leadstream_callbar_cta', 'Call Now');
+    // Appearance values
+    $callbar_bg         = (string) get_option('leadstream_callbar_bg', '#000000');
+    $callbar_btn_bg     = (string) get_option('leadstream_callbar_btn_bg', '#ffce00');
+    $callbar_btn_text   = (string) get_option('leadstream_callbar_btn_text', '#000000');
+    $callbar_hover_bg   = (string) get_option('leadstream_callbar_hover_bg', '#fff200');
+    $callbar_hover_text = (string) get_option('leadstream_callbar_hover_text', '#111111');
+    $callbar_border     = (string) get_option('leadstream_callbar_border', '#b8860b');
+    $callbar_font_size  = (string) get_option('leadstream_callbar_font_size', '1rem');
+    $callbar_border_w   = (string) get_option('leadstream_callbar_border_width', '1px');
+    $callbar_radius     = (string) get_option('leadstream_callbar_radius', '999px');
     $dni_rules_text = (string) get_option('leadstream_dni_rules', "");
         
         // Get phone click stats with proper wpdb->prepare() usage
@@ -1770,6 +1932,7 @@ document.addEventListener('wpformsSubmit', function (event) {
         
         ?>
         <div class="leadstream-phone-tracking" style="max-width: 900px;">
+            <?php if (class_exists('LS\\Admin\\Health')) { \LS\Admin\Health::render_phone_panel(); } ?>
             <h2>📞 Phone Click Tracking</h2>
             <p>Track clicks on phone numbers across your website. Monitor which numbers get the most calls and analyze user engagement patterns.</p>
             
@@ -1991,46 +2154,113 @@ document.addEventListener('wpformsSubmit', function (event) {
                 <table class="form-table" role="presentation">
                     <tbody>
                         <tr>
+                            <th scope="row"><label for="leadstream_default_country_code">Default Calling Country</label></th>
+                            <td>
+                                <?php self::country_code_field_callback(); ?>
+                                <p class="description" style="margin-top:4px;">Used only for matching clicks. Your visible/dialed number stays exactly as you enter it (including any leading 0). This setting helps the tracker recognise both national and international forms.</p>
+                            </td>
+                        </tr>
+                        <tr>
                             <th colspan="2"><h3 style="margin:8px 0;">📱 Mobile Sticky Call Bar</h3></th>
                         </tr>
                         <tr>
-                            <th scope="row">
-                                <label for="leadstream_callbar_enabled">Enable Call Bar</label>
-                            </th>
+                            <th scope="row"><label>Call bar settings</label></th>
                             <td>
-                                <label style="display:flex; align-items:center; gap:10px;">
-                                    <input type="checkbox" id="leadstream_callbar_enabled" name="leadstream_callbar_enabled" value="1" <?php checked($callbar_enabled, 1); ?> />
-                                    Show a sticky "Call Now" bar on mobile
-                                </label>
-                                <p class="description">Appears on mobile devices only by default. Clicking the bar uses your tracking just like any tel: link.</p>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row">
-                                <label for="leadstream_callbar_default">Default Phone Number</label>
-                            </th>
-                            <td>
-                                <input id="leadstream_callbar_default" name="leadstream_callbar_default" type="text" class="regular-text" value="<?php echo esc_attr($callbar_default); ?>" placeholder="(555) 123-4567" />
-                                <p class="description">Used when no dynamic rule matches. Automatically added to tracked numbers when saved.</p>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="leadstream_callbar_cta">CTA Text</label></th>
-                            <td>
-                                <input id="leadstream_callbar_cta" name="leadstream_callbar_cta" type="text" class="regular-text" value="<?php echo esc_attr($callbar_cta); ?>" placeholder="Call Now" />
-                                <p class="description">Text shown on the sticky bar button.</p>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label>Position</label></th>
-                            <td>
-                                <label><input type="radio" name="leadstream_callbar_position" value="bottom" <?php checked($callbar_position, 'bottom'); ?> /> Bottom</label>
-                                &nbsp;&nbsp;
-                                <label><input type="radio" name="leadstream_callbar_position" value="top" <?php checked($callbar_position, 'top'); ?> /> Top</label>
-                                &nbsp;&nbsp;
-                                <label style="margin-left:12px;">
-                                    <input type="checkbox" name="leadstream_callbar_mobile_only" value="1" <?php checked($callbar_mobile_only, 1); ?> /> Mobile only
-                                </label>
+                                <details class="postbox" style="margin-top: 18px; padding:0; border:1px solid #96d636; background:#fff; border-radius:6px;">
+                                    <summary class="hndle" style="padding:12px 16px;  background:#f6f7f7; color:#1d2327; font-weight:600; cursor:pointer; border-radius:6px 6px 0 0; display:flex; align-items:center; gap:8px;">
+                                        <span class="dashicons dashicons-phone"></span>
+                                        <span>Call bar settings Zone</span>
+                                    </summary>
+                                    <div class="inside" style="padding:16px;">
+                                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;align-items:end;">
+                                            <label style="display:flex;align-items:center;gap:10px;font-weight:600;">
+                                                <input type="checkbox" id="leadstream_callbar_enabled" name="leadstream_callbar_enabled" value="1" <?php checked($callbar_enabled, 1); ?> />
+                                                Enable Call Bar
+                                            </label>
+                                            <label style="display:flex;align-items:center;gap:10px;">
+                                                <input type="checkbox" name="leadstream_callbar_mobile_only" value="1" <?php checked($callbar_mobile_only, 1); ?> />
+                                                Mobile only
+                                            </label>
+                                            <label>Position<br/>
+                                                <span style="display:flex;gap:12px;align-items:center;">
+                                                    <label><input type="radio" name="leadstream_callbar_position" value="bottom" <?php checked($callbar_position, 'bottom'); ?> /> Bottom</label>
+                                                    <label><input type="radio" name="leadstream_callbar_position" value="top" <?php checked($callbar_position, 'top'); ?> /> Top</label>
+                                                </span>
+                                            </label>
+                                            <label>Alignment<br/>
+                                                <span style="display:flex;gap:12px;align-items:center;">
+                                                    <label title="Left aligns the button near the screen edge"><input type="radio" name="leadstream_callbar_align" value="left" <?php checked($callbar_align, 'left'); ?> /> Left</label>
+                                                    <label title="Center keeps the button centered (default)"><input type="radio" name="leadstream_callbar_align" value="center" <?php checked($callbar_align, 'center'); ?> /> Center</label>
+                                                    <label title="Right aligns the button near the screen edge"><input type="radio" name="leadstream_callbar_align" value="right" <?php checked($callbar_align, 'right'); ?> /> Right</label>
+                                                </span>
+                                            </label>
+                                            <div style="grid-column:1 / -1; margin:4px 0 8px 0; color:#50575e; font-size:13px;">
+                                                <p style="margin:0 0 6px 0;">You can place the Call Bar anywhere using the shortcode and choose the alignment (left, center, or right). Examples:</p>
+                                                <div><code>[leadstream_callbar align="left"]</code></div>
+                                                <div><code>[leadstream_callbar align="center"]</code></div>
+                                                <div><code>[leadstream_callbar align="right"]</code></div>
+                                            </div>
+                                            <label>Default Phone Number<br/>
+                                                <input id="leadstream_callbar_default" name="leadstream_callbar_default" type="tel" class="regular-text" style="width:260px" maxlength="24" value="<?php echo esc_attr($callbar_default); ?>" placeholder="(555) 123-4567" />
+                                            </label>
+                                            <label>CTA Text<br/>
+                                                <input id="leadstream_callbar_cta" name="leadstream_callbar_cta" type="text" class="regular-text" style="width:260px" maxlength="60" value="<?php echo esc_attr($callbar_cta); ?>" placeholder="Call Now" />
+                                            </label>
+                                        </div>
+                                        <hr style="margin:16px 0; border:none; border-top:1px solid #e5e5e5;" />
+                                        <div style="margin-bottom:8px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                                            <style>
+                                                .ls-swatch { display:inline-block; width:12px; height:12px; border:1px solid #c3c4c7; border-radius:2px; vertical-align:middle; margin-right:6px; }
+                                                .ls-leg { display:inline-flex; align-items:center; gap:6px; padding:2px 8px; border:1px solid #dcdcde; border-radius:999px; background:#fff; font-size:12px; color:#1d2327; }
+                                            </style>
+                                            <span class="ls-leg"><span class="ls-swatch" style="background:<?php echo esc_attr($callbar_bg); ?>"></span>Bar BG</span>
+                                            <span class="ls-leg"><span class="ls-swatch" style="background:<?php echo esc_attr($callbar_btn_bg); ?>"></span>Button BG</span>
+                                            <span class="ls-leg"><span class="ls-swatch" style="background:<?php echo esc_attr($callbar_btn_text); ?>"></span>Button Text</span>
+                                            <span class="ls-leg"><span class="ls-swatch" style="background:<?php echo esc_attr($callbar_hover_bg); ?>"></span>Hover BG</span>
+                                            <span class="ls-leg"><span class="ls-swatch" style="background:<?php echo esc_attr($callbar_hover_text); ?>"></span>Hover Text</span>
+                                            <span class="ls-leg"><span class="ls-swatch" style="background:<?php echo esc_attr($callbar_border); ?>"></span>Border</span>
+                                        </div>
+                                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+                                            <label><span class="ls-swatch" style="background:<?php echo esc_attr($callbar_bg); ?>"></span> Bar Background <span class="ls-help" title="Background color of the sticky bar behind the button.">?</span><br/>
+                                                <input type="text" class="small-text ls-color" style="width:96px" name="leadstream_callbar_bg" value="<?php echo esc_attr($callbar_bg); ?>" title="Bar background" />
+                                            </label>
+                                            <label><span class="ls-swatch" style="background:<?php echo esc_attr($callbar_btn_bg); ?>"></span> Button Background <span class="ls-help" title="Main background color of the call button.">?</span><br/>
+                                                <input type="text" class="small-text ls-color" style="width:96px" name="leadstream_callbar_btn_bg" value="<?php echo esc_attr($callbar_btn_bg); ?>" title="Button background" />
+                                            </label>
+                                            <label><span class="ls-swatch" style="background:<?php echo esc_attr($callbar_btn_text); ?>"></span> Button Text <span class="ls-help" title="Text color on the call button.">?</span><br/>
+                                                <input type="text" class="small-text ls-color" style="width:96px" name="leadstream_callbar_btn_text" value="<?php echo esc_attr($callbar_btn_text); ?>" title="Button text color" />
+                                            </label>
+                                            <label><span class="ls-swatch" style="background:<?php echo esc_attr($callbar_hover_bg); ?>"></span> Hover Background <span class="ls-help" title="Button background color when hovered.">?</span><br/>
+                                                <input type="text" class="small-text ls-color" style="width:96px" name="leadstream_callbar_hover_bg" value="<?php echo esc_attr($callbar_hover_bg); ?>" title="Hover background" />
+                                            </label>
+                                            <label><span class="ls-swatch" style="background:<?php echo esc_attr($callbar_hover_text); ?>"></span> Hover Text <span class="ls-help" title="Button text color when hovered.">?</span><br/>
+            									<input type="text" class="small-text ls-color" style="width:96px" name="leadstream_callbar_hover_text" value="<?php echo esc_attr($callbar_hover_text); ?>" title="Hover text color" />
+                                            </label>
+                                            <label><span class="ls-swatch" style="background:<?php echo esc_attr($callbar_border); ?>"></span> Border Color <span class="ls-help" title="Outline color of the call button.">?</span><br/>
+                                                <input type="text" class="small-text ls-color" style="width:96px" name="leadstream_callbar_border" value="<?php echo esc_attr($callbar_border); ?>" title="Button border color" />
+                                            </label>
+                                            <label>Border Width (px)<br/>
+                                                <input type="number" min="0" max="4" step="1" class="small-text" name="leadstream_callbar_border_width" value="<?php echo esc_attr(preg_replace('/[^0-9]/', '', $callbar_border_w)); ?>" />
+                                                <span class="description">0–4px</span>
+                                            </label>
+                                            <label>Border Radius<br/>
+                                                <input type="text" class="regular-text" style="width:120px" name="leadstream_callbar_radius" value="<?php echo esc_attr($callbar_radius); ?>" placeholder="e.g. 999px" />
+                                            </label>
+                                            <label>Font Size<br/>
+                                                <input type="text" class="regular-text" style="width:96px" name="leadstream_callbar_font_size" value="<?php echo esc_attr($callbar_font_size); ?>" placeholder="1rem" />
+                                            </label>
+                                        </div>
+                                        <p class="description" style="margin-top:8px;">Colors accept hex (e.g., #ffce00). Font size clamps to 1.0–1.6rem (or 16–26px). Border width clamps 0–4px.</p>
+                                        <div style="margin-top:14px">
+                                            <div class="ls-callbar ls-callbar--bottom ls-callbar--align-<?php echo esc_attr(in_array($callbar_align,['left','center','right'],true)?$callbar_align:'center'); ?>" style="position:static;display:flex;justify-content:<?php echo $callbar_align==='left'?'flex-start':($callbar_align==='right'?'flex-end':'center'); ?>;background:<?php echo esc_attr($callbar_bg); ?>;padding:10px 12px">
+                                                <a class="ls-callbar__btn" style="background:<?php echo esc_attr($callbar_btn_bg); ?>;color:<?php echo esc_attr($callbar_btn_text); ?>;border:<?php echo esc_attr($callbar_border_w); ?> solid <?php echo esc_attr($callbar_border); ?>;font-size:<?php echo esc_attr($callbar_font_size); ?>;padding:10px 16px;border-radius:<?php echo esc_attr($callbar_radius); ?>;text-decoration:none;display:inline-flex;gap:10px;align-items:center;cursor:pointer">
+                                                    <span class="ls-callbar__cta"><?php echo esc_html($callbar_cta ?: 'Call Now'); ?></span>
+                                                    <span class="ls-callbar__num"><?php echo esc_html($callbar_default ?: '(555) 123-4567'); ?></span>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </details>
                             </td>
                         </tr>
                         <tr>
@@ -2114,11 +2344,11 @@ document.addEventListener('wpformsSubmit', function (event) {
                     $missed_statuses
                 ));
             ?>
-            <button type="button" class="button button-secondary button-small ls-acc-toggle" data-acc="ls-missed-calls" aria-controls="ls-missed-calls" aria-expanded="true">🚫 Missed Calls (Webhook)</button>
+            <button type="button" class="button button-secondary button-small ls-acc-toggle" data-acc="ls-missed-calls" aria-controls="ls-missed-calls" aria-expanded="true">🚫 Missed Calls (Webhook - requires provider integration)</button>
             <div id="ls-missed-calls" class="ls-acc-panel" style="margin-top: 10px;">
                 <h3 class="screen-reader-text">🚫 Missed Calls</h3>
                 <?php if (empty($recent_missed)): ?>
-                    <div style="padding:12px; color:#646970;">No missed calls recorded yet.</div>
+                    <div style="padding:12px; color:#646970;">No data. This section requires a phone provider integration (e.g., Twilio, RingCentral) posting to the webhook endpoint. Planned for a future phase.</div>
                 <?php else: ?>
                 <table class="widefat fixed striped">
                     <thead>
@@ -2236,13 +2466,8 @@ document.addEventListener('wpformsSubmit', function (event) {
                 </div>
             </div>
             
-            <!-- Quick display controls & jump links -->
+            <!-- Per-page quick control -->
             <div class="ls-btn-row" style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin: 10px 0 0 0;">
-                <nav style="display:flex; gap:6px;">
-                    <a href="#ls-recent" class="button">Recent</a>
-                    <a href="#ls-performance" class="button">Performance</a>
-                    <a href="#ls-all-calls" class="button button-primary">All Calls</a>
-                </nav>
                 <form method="get" style="margin-left:auto; display:flex; gap:8px; align-items:center;">
                     <input type="hidden" name="page" value="leadstream-analytics-injector" />
                     <input type="hidden" name="tab" value="phone" />
@@ -2260,6 +2485,8 @@ document.addEventListener('wpformsSubmit', function (event) {
 
             <!-- Phone Click History -->
             <?php
+            // Respect global per-page setting for Recent as well
+            $pp_recent = isset($_GET['pp']) ? max(10, min(200, intval($_GET['pp']))) : 25;
             $recent_phone_clicks = $wpdb->get_results($wpdb->prepare(
                 "SELECT 
                     link_key as phone_number,
@@ -2279,7 +2506,7 @@ document.addEventListener('wpformsSubmit', function (event) {
                  ORDER BY clicked_at DESC 
                  LIMIT %d",
                 'phone',
-                50
+                $pp_recent
             ));
             
             if (!empty($recent_phone_clicks)): ?>
@@ -2539,12 +2766,13 @@ document.addEventListener('wpformsSubmit', function (event) {
             <?php endif; // table_exists ?>
         </div>
         
-        <!-- FAQ & Tips -->
-        <div style="margin-top: 24px; background:#ffffff; border:1px solid #dcdcde; border-radius:6px;">
-            <div style="padding:14px 16px; border-bottom:1px solid #f0f0f1;">
-                <h3 style="margin:0; font-size:16px;">❓ Phone Tracking FAQ & Tips</h3>
-            </div>
-            <div style="padding:14px 16px;">
+        <!-- FAQ & Tips (collapsible) -->
+        <details class="ls-acc" id="ls-phone-faq" style="margin-top: 24px;">
+            <summary style="padding:12px 16px; border:1px solid #dcdcde; border-radius:6px; background:#f6f7f7; color:#1d2327; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:8px;">
+                <span class="dashicons dashicons-editor-help" style="font-size:18px;"></span>
+                <span>Phone Tracking FAQ & Tips</span>
+            </summary>
+            <div style="padding:14px 16px; border:1px solid #dcdcde; border-top:none; border-radius:0 0 6px 6px; background:#fff;">
                 <details open style="margin-bottom:10px;">
                     <summary style="font-weight:600; cursor:pointer;">How do I add phone numbers to track?</summary>
                     <div style="margin-top:8px; color:#50575e;">
@@ -2576,8 +2804,52 @@ document.addEventListener('wpformsSubmit', function (event) {
                         Use From/To for date ranges, select a specific phone number, or search by page title/URL or element (like a, #call-now, .btn). Adjust Per Page to control list size. Click Export CSV to download the current view.
                     </div>
                 </details>
+
+                <hr style="margin:14px 0; border:none; border-top:1px solid #f0f0f1;" />
+                <details style="margin-bottom:10px;">
+                    <summary style="font-weight:600; cursor:pointer;">How do I enable and customize the Mobile Sticky Call Bar?</summary>
+                    <div style="margin-top:8px; color:#50575e;">
+                        In Phone Click Tracking, toggle “Enable Call Bar”, choose Mobile only, pick Position (Top/Bottom) and Alignment (Left/Center/Right), and set CTA text and Default Phone. The live preview reflects your colors, font size, border, and radius.
+                    </div>
+                </details>
+                <details style="margin-bottom:10px;">
+                    <summary style="font-weight:600; cursor:pointer;">Shortcode vs auto‑inject — which one shows?</summary>
+                    <div style="margin-top:8px; color:#50575e;">
+                        When enabled, the bar is auto‑injected at the top or bottom site‑wide based on your Position setting. If you place the shortcode <code>[leadstream_callbar]</code> on a page, auto‑inject is suppressed on that page to avoid duplicates. Shortcode attributes: <code>align="left|center|right"</code>, <code>position="top|bottom"</code>, <code>cta="Tap to Call"</code>, <code>class="extra-classes"</code>. Example: <code>[leadstream_callbar align="right" position="top" cta="Tap to Call"]</code>.
+                    </div>
+                </details>
+                <details style="margin-bottom:10px;">
+                    <summary style="font-weight:600; cursor:pointer;">What data is captured on each phone click?</summary>
+                    <div style="margin-top:8px; color:#50575e;">
+                        We log to the <code>ls_clicks</code> table with <em>link_type=phone</em>, normalized digits, original formatted number, timestamps (date/time), IP, user agent, referrer, WordPress user ID (if logged in), and context like element type/class/id and page title in metadata. If GA4 is present, we also emit a <code>phone_click</code> event.
+                    </div>
+                </details>
+                <details style="margin-bottom:10px;">
+                    <summary style="font-weight:600; cursor:pointer;">Does Dynamic Number Insertion (DNI) change the Call Bar number?</summary>
+                    <div style="margin-top:8px; color:#50575e;">
+                        No. DNI rules help match and track numbers shown in your content and tel: links. The Call Bar uses the Default Phone you configure in settings (and respects your CTA/position/alignment). Use the shortcode if you need page‑level placement control.
+                    </div>
+                </details>
+                <details style="margin-bottom:10px;">
+                    <summary style="font-weight:600; cursor:pointer;">How do I write DNI rules?</summary>
+                    <div style="margin-top:8px; color:#50575e;">
+                        One rule per line using patterns like <code>utm_source=google =&gt; 1-800-555-1234</code>, <code>ref=facebook.com =&gt; (555) 222-3333</code>, or <code>path=/landing/california =&gt; 555-777-8888</code>. We support <code>utm_*</code>, <code>ref</code>, <code>path</code>, and free‑text URL/referrer substrings. Numbers in rules are auto‑added to your tracked list on save.
+                    </div>
+                </details>
+                <details style="margin-bottom:10px;">
+                    <summary style="font-weight:600; cursor:pointer;">Can I make QR codes for my short links?</summary>
+                    <div style="margin-top:8px; color:#50575e;">
+                        Yes. In the Pretty Links dashboard, click the QR button on any row to open a modal with pro‑grade controls: 512/1024 px output, error correction (L/M/Q/H), transparent background, brand colors, quiet‑zone padding, and logo overlay (use site icon or upload). Download PNG, pop out, or copy the URL.
+                    </div>
+                </details>
+                <details>
+                    <summary style="font-weight:600; cursor:pointer;">Can I record missed/ended calls from providers?</summary>
+                    <div style="margin-top:8px; color:#50575e;">
+                        Not by default. Today, LeadStream records call clicks (tap-to-call) for analytics. Missed/ended call logs require a provider integration (e.g., Twilio, RingCentral) to post to a prepared endpoint: <code>/wp-json/leadstream/v1/calls</code>. This integration is planned for a future phase; until then, the “Missed Calls (Webhook)” panel will remain empty.
+                    </div>
+                </details>
             </div>
-        </div>
+        </details>
 
         <?php if (current_user_can('manage_options')): ?>
         <!-- Import: Phone Clicks (separate card) -->
@@ -2696,16 +2968,49 @@ document.addEventListener('wpformsSubmit', function (event) {
         </table>
 
         <?php 
-        // Pagination
+        // Pagination with First/Prev/Next/Last and numeric pages
         $total_pages = max(1, ceil($total_count / $per_page));
         if ($total_pages > 1):
+            $start_num = $offset + 1;
+            $end_num = min($offset + $per_page, $total_count);
             echo '<div class="tablenav"><div class="tablenav-pages">';
-            for ($i=1; $i<=$total_pages; $i++) {
-                $url = add_query_arg(array_merge($_GET, ['p'=>$i]));
-                $style = $i==$paged ? 'font-weight:600;' : '';
-                echo '<a class="page-numbers js-paginate" data-args=' . esc_attr(wp_json_encode(array_merge($_GET, ['p'=>$i]))) . ' style="margin-right:6px; ' . esc_attr($style) . '" href="' . esc_url($url) . '">' . intval($i) . '</a>';
+            echo '<span class="displaying-num">' . intval($start_num) . '–' . intval($end_num) . ' of ' . intval($total_count) . '</span>';
+            echo '<span class="pagination-links">';
+            $keep = array_intersect_key($_GET, array_flip(['from','to','phone','q','elem','pp']));
+            $base_args = array_merge(['page'=>'leadstream-analytics-injector','tab'=>'phone'], $keep);
+            $first_url = add_query_arg(array_merge($base_args, ['p'=>1]), admin_url('admin.php'));
+            $prev_page = max(1, $paged - 1);
+            $prev_url  = add_query_arg(array_merge($base_args, ['p'=>$prev_page]), admin_url('admin.php'));
+            $next_page = min($total_pages, $paged + 1);
+            $next_url  = add_query_arg(array_merge($base_args, ['p'=>$next_page]), admin_url('admin.php'));
+            $last_url  = add_query_arg(array_merge($base_args, ['p'=>$total_pages]), admin_url('admin.php'));
+
+            if ($paged > 1) {
+                echo '<a class="page-numbers first-page js-paginate" data-args=' . esc_attr(wp_json_encode(array_merge($keep, ['p'=>1]))) . ' href="' . esc_url($first_url) . '"><span class="screen-reader-text">First page</span></a>';
+                echo '<a class="page-numbers prev-page js-paginate" data-args=' . esc_attr(wp_json_encode(array_merge($keep, ['p'=>$prev_page]))) . ' href="' . esc_url($prev_url) . '"><span class="screen-reader-text">Previous page</span></a>';
+            } else {
+                echo '<span class="tablenav-pages-navspan button disabled first-page" aria-hidden="true">&nbsp;</span>';
+                echo '<span class="tablenav-pages-navspan button disabled prev-page" aria-hidden="true">&nbsp;</span>';
             }
-            echo '</div></div>';
+
+            // Numeric pages
+            for ($i=1; $i<=$total_pages; $i++) {
+                $url = add_query_arg(array_merge($base_args, ['p'=>$i]), admin_url('admin.php'));
+                if ($i == $paged) {
+                    echo '<span class="page-numbers current" aria-current="page">' . intval($i) . '</span>';
+                } else {
+                    echo '<a class="page-numbers js-paginate" data-args=' . esc_attr(wp_json_encode(array_merge($keep, ['p'=>$i]))) . ' href="' . esc_url($url) . '">' . intval($i) . '</a>';
+                }
+            }
+
+            if ($paged < $total_pages) {
+                echo '<a class="page-numbers next-page js-paginate" data-args=' . esc_attr(wp_json_encode(array_merge($keep, ['p'=>$next_page]))) . ' href="' . esc_url($next_url) . '"><span class="screen-reader-text">Next page</span></a>';
+                echo '<a class="page-numbers last-page js-paginate" data-args=' . esc_attr(wp_json_encode(array_merge($keep, ['p'=>$total_pages]))) . ' href="' . esc_url($last_url) . '"><span class="screen-reader-text">Last page</span></a>';
+            } else {
+                echo '<span class="tablenav-pages-navspan button disabled next-page" aria-hidden="true">&nbsp;</span>';
+                echo '<span class="tablenav-pages-navspan button disabled last-page" aria-hidden="true">&nbsp;</span>';
+            }
+            echo '</span></div></div>';
         endif; 
         ?>
         <?php
@@ -2753,13 +3058,45 @@ document.addEventListener('wpformsSubmit', function (event) {
 
         <?php $total_pages = max(1, ceil($total_count / $per_page));
         if ($total_pages > 1):
+            $start_num = ($paged - 1) * $per_page + 1;
+            $end_num = min($paged * $per_page, $total_count);
             echo '<div class="tablenav"><div class="tablenav-pages">';
-            for ($i=1; $i<=$total_pages; $i++) {
-                $url = add_query_arg(array_merge($_GET, ['c_p'=>$i]));
-                $style = $i==$paged ? 'font-weight:600;' : '';
-                echo '<a class="page-numbers js-paginate" data-args=' . esc_attr(wp_json_encode(array_merge($_GET, ['c_p'=>$i]))) . ' style="margin-right:6px; ' . esc_attr($style) . '" href="' . esc_url($url) . '">' . intval($i) . '</a>';
+            echo '<span class="displaying-num">' . intval($start_num) . '–' . intval($end_num) . ' of ' . intval($total_count) . '</span>';
+            echo '<span class="pagination-links">';
+            $ckeep = array_intersect_key($_GET, array_flip(['c_from','c_to','c_status','c_provider','c_fromnum','c_tonum','c_group','c_pp']));
+            $cbase_args = array_merge(['page'=>'leadstream-analytics-injector','tab'=>'phone'], $ckeep);
+            $first_url = add_query_arg(array_merge($cbase_args, ['c_p'=>1]), admin_url('admin.php'));
+            $prev_page = max(1, $paged - 1);
+            $prev_url  = add_query_arg(array_merge($cbase_args, ['c_p'=>$prev_page]), admin_url('admin.php'));
+            $next_page = min($total_pages, $paged + 1);
+            $next_url  = add_query_arg(array_merge($cbase_args, ['c_p'=>$next_page]), admin_url('admin.php'));
+            $last_url  = add_query_arg(array_merge($cbase_args, ['c_p'=>$total_pages]), admin_url('admin.php'));
+
+            if ($paged > 1) {
+                echo '<a class="page-numbers first-page js-paginate" data-args=' . esc_attr(wp_json_encode(array_merge($ckeep, ['c_p'=>1]))) . ' href="' . esc_url($first_url) . '"><span class="screen-reader-text">First page</span></a>';
+                echo '<a class="page-numbers prev-page js-paginate" data-args=' . esc_attr(wp_json_encode(array_merge($ckeep, ['c_p'=>$prev_page]))) . ' href="' . esc_url($prev_url) . '"><span class="screen-reader-text">Previous page</span></a>';
+            } else {
+                echo '<span class="tablenav-pages-navspan button disabled first-page" aria-hidden="true">&nbsp;</span>';
+                echo '<span class="tablenav-pages-navspan button disabled prev-page" aria-hidden="true">&nbsp;</span>';
             }
-            echo '</div></div>';
+
+            for ($i=1; $i<=$total_pages; $i++) {
+                $url = add_query_arg(array_merge($cbase_args, ['c_p'=>$i]), admin_url('admin.php'));
+                if ($i == $paged) {
+                    echo '<span class="page-numbers current" aria-current="page">' . intval($i) . '</span>';
+                } else {
+                    echo '<a class="page-numbers js-paginate" data-args=' . esc_attr(wp_json_encode(array_merge($ckeep, ['c_p'=>$i]))) . ' href="' . esc_url($url) . '">' . intval($i) . '</a>';
+                }
+            }
+
+            if ($paged < $total_pages) {
+                echo '<a class="page-numbers next-page js-paginate" data-args=' . esc_attr(wp_json_encode(array_merge($ckeep, ['c_p'=>$next_page]))) . ' href="' . esc_url($next_url) . '"><span class="screen-reader-text">Next page</span></a>';
+                echo '<a class="page-numbers last-page js-paginate" data-args=' . esc_attr(wp_json_encode(array_merge($ckeep, ['c_p'=>$total_pages]))) . ' href="' . esc_url($last_url) . '"><span class="screen-reader-text">Last page</span></a>';
+            } else {
+                echo '<span class="tablenav-pages-navspan button disabled next-page" aria-hidden="true">&nbsp;</span>';
+                echo '<span class="tablenav-pages-navspan button disabled last-page" aria-hidden="true">&nbsp;</span>';
+            }
+            echo '</span></div></div>';
         endif; ?>
         <?php
         return ob_get_clean();

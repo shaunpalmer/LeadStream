@@ -2,7 +2,7 @@
 /*
 Plugin Name: LeadStream: Advanced Analytics Injector
 Description: Professional JavaScript injection for advanced lead tracking. Custom event handling for Meta Pixel, Google Analytics (GA4), TikTok Pixel, Triple Whale, and any analytics platform. Built for agencies and marketers who need precise conversion tracking.
-Version: 2.12.0
+Version: 2.12.2
 Author: shaun palmer
 Text Domain: leadstream-analytics
 */
@@ -14,9 +14,11 @@ if (!defined('ABSPATH')) {
 // === MODULAR ARCHITECTURE ===
 // Load modular components
 require_once plugin_dir_path(__FILE__) . 'includes/Utils.php';
+// Load Assets in both admin and frontend so public enqueues register
+require_once plugin_dir_path(__FILE__) . 'includes/Admin/Assets.php';
 
 if (is_admin()) {
-    require_once plugin_dir_path(__FILE__) . 'includes/Admin/Assets.php';
+    require_once plugin_dir_path(__FILE__) . 'includes/Admin/Health.php';
     require_once plugin_dir_path(__FILE__) . 'includes/Admin/Settings.php';
     require_once plugin_dir_path(__FILE__) . 'includes/Admin/LinksDashboard.php';
     require_once plugin_dir_path(__FILE__) . 'includes/Repository/LinksRepository.php';
@@ -24,12 +26,12 @@ if (is_admin()) {
     require_once plugin_dir_path(__FILE__) . 'includes/AJAX/UTMHandler.php';
     require_once plugin_dir_path(__FILE__) . 'includes/AJAX/PhoneHandler.php';
     require_once plugin_dir_path(__FILE__) . 'includes/REST/CallsWebhook.php';
-    \LS\Admin\Assets::init();
     \LS\Admin\Settings::init(); // ACTIVATED: New modular settings handler
     \LS\Admin\LinksDashboard::init(); // ACTIVATED: Pretty Links management
     \LS\AJAX\UTMHandler::init(); // ACTIVATED: UTM Builder AJAX handler
     \LS\AJAX\PhoneHandler::init(); // ACTIVATED: Phone tracking AJAX handler
-    \LS\REST\CallsWebhook::init(); // REST: Provider call webhooks
+    \LS\REST\CallsWebhook::init(); // REST: Provider call webhooks 
+  
 } else {
     // Frontend-only includes
     require_once plugin_dir_path(__FILE__) . 'includes/AJAX/PhoneHandler.php';
@@ -51,10 +53,32 @@ require_once plugin_dir_path(__FILE__) . 'includes/Frontend/RedirectHandler.php'
 \LS\Frontend\Injector::init();
 \LS\Frontend\RedirectHandler::init();
 
+// Initialize Assets globally (admin + frontend) so phone-tracking enqueues on public pages
+\LS\Admin\Assets::init();
+
+require_once plugin_dir_path(__FILE__) . 'includes/LS_Callbar.php';
+if (class_exists('\LS\LS_Callbar')) {
+    \LS\LS_Callbar::init();
+}
+
 // === CLEAN MODULAR ARCHITECTURE ===
 // All legacy functions have been successfully migrated to modular classes
 
+require __DIR__ . '/includes/License/ApiClient.php';
+require __DIR__ . '/includes/License/Manager.php';
+require __DIR__ . '/includes/License/AdminTab.php';
+require __DIR__ . '/includes/Updates/Updater.php';
 
+function ls_boot_license_components() {
+    LS\License\AdminTab::boot();
+    LS\Updates\Updater::boot(); // harmless if update API returns nothing
+}
+add_action('plugins_loaded', 'ls_boot_license_components');
+
+function ls_expose_pro_filter($val = false) {
+    return LS\License\Manager::pro();
+}
+add_filter('ls_is_pro', 'ls_expose_pro_filter');
 
 
 

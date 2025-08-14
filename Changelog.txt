@@ -1,10 +1,26 @@
-## 2.12.0 - QR logo polish + tiny LS badge (free)
-- QR modal: logo size slider (8–20%) with default 16%, knockout padding, ECC auto-bump, hiDPI export, strict quiet-zone on PNG/pop-out, and 7:1 contrast warning.
-- Print guard: ensures module ≥ 4 px at 1024 print size; exports remain tack-sharp.
-- UI polish: color pickers, hints, and safer defaults; filename and pop-out improvements.
-- Added 10px LS dot in footer for free installs (tooltip + noscript). Paid stubs disable it via constant/filter/option.
-- Settings: grayed-out LS badge toggle placeholder; auto-enables on paid.
-- Misc: centered badge on mobile; placement resilient near edges.
+## 2.12.2 - Phone Tracking Baseline: Reliable Frontend Enqueue, Robust AJAX, Anti‑Dupe, Debug Gating
+- FIXED: Frontend enqueue for phone tracking script. Assets loader now initializes on both admin and public pages, ensuring `assets/js/phone-tracking.js` is present when phone tracking is enabled and numbers are configured.
+- ADDED: Admin-only HTML comments to verify lifecycle:
+	- In <head>: `<!-- LeadStream: wp_enqueue_scripts fired; this is where we queue phone tracking (Assets::enqueue_phone_tracking) -->`
+	- In <footer>: `<!-- LeadStream: phone tracking enqueued (handle: leadstream-phone-tracking) -->`
+	These comments only appear for admins on the frontend, purely for verification.
+- ENHANCED: Localized config publishes both `ajaxUrl` and `ajax_url` for compatibility across consumers. Also added a default selector fallback so plain `tel:` links are always tracked even if custom selectors are empty.
+- ENHANCED: Tracker JS hardening (`assets/js/phone-tracking.js`):
+	- Resolves AJAX endpoint robustly: `ajaxUrl || ajax_url || window.ajaxurl || '/wp-admin/admin-ajax.php'`.
+	- Defaults selectors to `a[href^="tel:"], .ls-callbar a` when none provided.
+	- Sends both `nonce` and `_ajax_nonce` for broader server compatibility.
+	- Implements smart delivery (`fetch` with `keepalive` + `sendBeacon` fallback on visibility/pagehide) to avoid dropped posts on mobile when the call UI steals focus.
+- ADDED: Server-side anti-duplication (2s window). Collapses accidental double posts (e.g., fetch + beacon or rapid double taps) via a short-lived transient key combining visitor id, phone, origin, and a 2s bucket. Returns `{ ok: true, dupe: 1 }` without inserting a second row.
+- ENHANCED: Health panel (Phone tab) continues to show whether the script would enqueue and the exact script URL; added above admin-only comments to front-end for cross-checking.
+- CHANGED: Debug badge (`LeadStream Phone tracking active`) is now gated behind WP_DEBUG and `?ls_phone_debug=1` (admin-only). It will not appear in production.
+- COMPAT: No breaking changes to endpoints. The AJAX handler accepts both nonce parameter names; payload now uses URL-encoded form in addition to existing FormData compatibility.
+- NOTES: If you cache/minify JS, purge your cache after this update. Ensure tracked numbers are configured in Phone settings; selectors are optional but can augment matching when needed.
+
+## 2.12.1 - Admin Pagination Icons + Dashicons
+- FIXED: Prev/Next/First/Last pagination icons in LeadStream admin tables could appear invisible when pseudo-elements were reset. Restored dashicon-based :before icons and ensured visibility across admin color schemes.
+- ADDED: Explicit Dashicons enqueue on the LeadStream settings page to guarantee icon font availability.
+- POLISH: Disabled pager buttons now show appropriate (grey) icons; numeric and arrow links look consistent for Phone and Call Outcomes tables.
+- COMPAT: Prevented duplicate icons by scoping/removing prior Unicode ::after arrows where needed; kept screen-reader labels intact for accessibility.
 
 ## 2.11.0 - Admin Datepicker + Pretty Links Accordion UX
 - ADDED: Calendar datepicker (Flatpickr) for all From/To filters on Pretty Links and Phone tabs
@@ -18,4 +34,13 @@
 - CSV export of current view (secure admin-post with nonce)
 - New Redirect column and defensive defaulting for legacy data
 - Fixed wpdb::prepare warnings (prepare only when placeholders exist)
+
+
+## 2.12.0 - Mobile Call Bar: Alignment + Shortcode UX
+- ADDED: Button alignment (Left/Center/Right) with live admin preview
+- ADDED: Alignment shortcode attribute `align="left|center|right"`
+- ENHANCED: Shortcode now takes precedence over auto-inject on pages where it’s used
+- ENHANCED: Prevent multiple Call Bars when shortcode is inserted more than once
+- POLISH: Inline help paragraph with three shortcode examples inside the Call Bar settings
+- DEFAULT: Mobile-only behavior retained; desktop remains off by default
 
