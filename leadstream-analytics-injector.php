@@ -64,7 +64,21 @@ if (class_exists('\LS\LS_Callbar')) {
 // === CLEAN MODULAR ARCHITECTURE ===
 // All legacy functions have been successfully migrated to modular classes
 
+require __DIR__ . '/includes/License/ApiClient.php';
+require __DIR__ . '/includes/License/Manager.php';
+require __DIR__ . '/includes/License/AdminTab.php';
+require __DIR__ . '/includes/Updates/Updater.php';
 
+function ls_boot_license_components() {
+    LS\License\AdminTab::boot();
+    LS\Updates\Updater::boot(); // harmless if update API returns nothing
+}
+add_action('plugins_loaded', 'ls_boot_license_components');
+
+function ls_expose_pro_filter($val = false) {
+    return LS\License\Manager::pro();
+}
+add_filter('ls_is_pro', 'ls_expose_pro_filter');
 
 
 
