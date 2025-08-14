@@ -1,3 +1,21 @@
+## 2.12.2 - Phone Tracking Baseline: Reliable Frontend Enqueue, Robust AJAX, Anti‑Dupe, Debug Gating
+- FIXED: Frontend enqueue for phone tracking script. Assets loader now initializes on both admin and public pages, ensuring `assets/js/phone-tracking.js` is present when phone tracking is enabled and numbers are configured.
+- ADDED: Admin-only HTML comments to verify lifecycle:
+	- In <head>: `<!-- LeadStream: wp_enqueue_scripts fired; this is where we queue phone tracking (Assets::enqueue_phone_tracking) -->`
+	- In <footer>: `<!-- LeadStream: phone tracking enqueued (handle: leadstream-phone-tracking) -->`
+	These comments only appear for admins on the frontend, purely for verification.
+- ENHANCED: Localized config publishes both `ajaxUrl` and `ajax_url` for compatibility across consumers. Also added a default selector fallback so plain `tel:` links are always tracked even if custom selectors are empty.
+- ENHANCED: Tracker JS hardening (`assets/js/phone-tracking.js`):
+	- Resolves AJAX endpoint robustly: `ajaxUrl || ajax_url || window.ajaxurl || '/wp-admin/admin-ajax.php'`.
+	- Defaults selectors to `a[href^="tel:"], .ls-callbar a` when none provided.
+	- Sends both `nonce` and `_ajax_nonce` for broader server compatibility.
+	- Implements smart delivery (`fetch` with `keepalive` + `sendBeacon` fallback on visibility/pagehide) to avoid dropped posts on mobile when the call UI steals focus.
+- ADDED: Server-side anti-duplication (2s window). Collapses accidental double posts (e.g., fetch + beacon or rapid double taps) via a short-lived transient key combining visitor id, phone, origin, and a 2s bucket. Returns `{ ok: true, dupe: 1 }` without inserting a second row.
+- ENHANCED: Health panel (Phone tab) continues to show whether the script would enqueue and the exact script URL; added above admin-only comments to front-end for cross-checking.
+- CHANGED: Debug badge (`LeadStream Phone tracking active`) is now gated behind WP_DEBUG and `?ls_phone_debug=1` (admin-only). It will not appear in production.
+- COMPAT: No breaking changes to endpoints. The AJAX handler accepts both nonce parameter names; payload now uses URL-encoded form in addition to existing FormData compatibility.
+- NOTES: If you cache/minify JS, purge your cache after this update. Ensure tracked numbers are configured in Phone settings; selectors are optional but can augment matching when needed.
+
 ## 2.12.1 - Admin Pagination Icons + Dashicons
 - FIXED: Prev/Next/First/Last pagination icons in LeadStream admin tables could appear invisible when pseudo-elements were reset. Restored dashicon-based :before icons and ensured visibility across admin color schemes.
 - ADDED: Explicit Dashicons enqueue on the LeadStream settings page to guarantee icon font availability.

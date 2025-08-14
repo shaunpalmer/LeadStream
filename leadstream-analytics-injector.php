@@ -2,7 +2,7 @@
 /*
 Plugin Name: LeadStream: Advanced Analytics Injector
 Description: Professional JavaScript injection for advanced lead tracking. Custom event handling for Meta Pixel, Google Analytics (GA4), TikTok Pixel, Triple Whale, and any analytics platform. Built for agencies and marketers who need precise conversion tracking.
-Version: 2.12.1
+Version: 2.12.2
 Author: shaun palmer
 Text Domain: leadstream-analytics
 */
@@ -14,9 +14,11 @@ if (!defined('ABSPATH')) {
 // === MODULAR ARCHITECTURE ===
 // Load modular components
 require_once plugin_dir_path(__FILE__) . 'includes/Utils.php';
+// Load Assets in both admin and frontend so public enqueues register
+require_once plugin_dir_path(__FILE__) . 'includes/Admin/Assets.php';
 
 if (is_admin()) {
-    require_once plugin_dir_path(__FILE__) . 'includes/Admin/Assets.php';
+    require_once plugin_dir_path(__FILE__) . 'includes/Admin/Health.php';
     require_once plugin_dir_path(__FILE__) . 'includes/Admin/Settings.php';
     require_once plugin_dir_path(__FILE__) . 'includes/Admin/LinksDashboard.php';
     require_once plugin_dir_path(__FILE__) . 'includes/Repository/LinksRepository.php';
@@ -24,7 +26,6 @@ if (is_admin()) {
     require_once plugin_dir_path(__FILE__) . 'includes/AJAX/UTMHandler.php';
     require_once plugin_dir_path(__FILE__) . 'includes/AJAX/PhoneHandler.php';
     require_once plugin_dir_path(__FILE__) . 'includes/REST/CallsWebhook.php';
-    \LS\Admin\Assets::init();
     \LS\Admin\Settings::init(); // ACTIVATED: New modular settings handler
     \LS\Admin\LinksDashboard::init(); // ACTIVATED: Pretty Links management
     \LS\AJAX\UTMHandler::init(); // ACTIVATED: UTM Builder AJAX handler
@@ -51,6 +52,9 @@ require_once plugin_dir_path(__FILE__) . 'includes/Frontend/RedirectHandler.php'
 \LS\Setup\Installer::init();
 \LS\Frontend\Injector::init();
 \LS\Frontend\RedirectHandler::init();
+
+// Initialize Assets globally (admin + frontend) so phone-tracking enqueues on public pages
+\LS\Admin\Assets::init();
 
 require_once plugin_dir_path(__FILE__) . 'includes/LS_Callbar.php';
 if (class_exists('\LS\LS_Callbar')) {

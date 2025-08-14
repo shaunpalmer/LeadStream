@@ -1,5 +1,38 @@
 (function () {
   'use strict';
+  // Resolve AJAX endpoint robustly across naming conventions
+  function getAjaxUrl() {
+    try {
+      if (window.LeadStreamPhone) {
+        return LeadStreamPhone.ajaxUrl || LeadStreamPhone.ajax_url || window.ajaxurl || '/wp-admin/admin-ajax.php';
+      }
+    } catch (e) { }
+    return window.ajaxurl || '/wp-admin/admin-ajax.php';
+  }
+
+  // Smart sender: try fetch with keepalive; fall back to sendBeacon when page hides
+  function sendSmart(url, params) {
+    var sent = false;
+    var body = (typeof params === 'string') ? params : String(new URLSearchParams(params));
+    try {
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body,
+        credentials: 'same-origin',
+        keepalive: true
+      }).then(function () { sent = true; }).catch(function () { });
+    } catch (e) { }
+    var onHide = function () {
+      try {
+        if (!sent && navigator.sendBeacon) {
+          navigator.sendBeacon(url, body);
+        }
+      } catch (e) { }
+    };
+    document.addEventListener('visibilitychange', onHide, { once: true });
+    window.addEventListener('pagehide', onHide, { once: true });
+  }
   // Beacon helper with fetch fallback
   function lsSend(url, fd) {
     try {
@@ -27,8 +60,9 @@
   const trackedNumbers = (LeadStreamPhone.numbers || []).map(num => String(num).replace(/\D/g, ''));
   // Optional alternate variants (national vs E.164) provided by PHP for better matching
   const altNumbers = (LeadStreamPhone.altNumbers || []).map(num => String(num).replace(/\D/g, ''));
-  const customSelectors = LeadStreamPhone.selectors ?
-    LeadStreamPhone.selectors.split('\n').filter(s => s.trim()) : [];
+  // Default to sane selectors when not provided
+  const selectorString = (LeadStreamPhone.selectors && LeadStreamPhone.selectors.trim()) ? LeadStreamPhone.selectors : 'a[href^="tel:"], .ls-callbar a';
+  const customSelectors = selectorString.split('\n').map(s => s.trim()).filter(Boolean);
 
   /**
    * Check if a phone number matches our tracked numbers
@@ -70,23 +104,22 @@
       });
     }
 
-    // 2) Send to WordPress database via modern fetch API
-    const formData = new FormData();
-    formData.append('action', 'leadstream_record_phone_click');
-    formData.append('phone', normalizedPhone);
-    formData.append('original_phone', phoneNumber);
-    formData.append('element_type', element.tagName.toLowerCase());
-    formData.append('element_class', element.className || '');
-    formData.append('element_id', element.id || '');
-    formData.append('page_url', window.location.href);
-    formData.append('page_title', document.title);
-    formData.append('nonce', LeadStreamPhone.nonce);
-    formData.append('origin', origin);
-
-    // Prefer sendBeacon to avoid navigation drop; fallback to fetch
-    lsSend(LeadStreamPhone.ajax_url, formData).catch(error => {
-      console.warn('LeadStream: Failed to record phone click:', error);
-    });
+    // 2) Send to WordPress database with smart sender (fetch keepalive + beacon on hide)
+    const p = new URLSearchParams();
+    p.append('action', 'leadstream_record_phone_click');
+    p.append('phone', normalizedPhone);
+    p.append('original_phone', phoneNumber);
+    p.append('element_type', element.tagName.toLowerCase());
+    p.append('element_class', element.className || '');
+    p.append('element_id', element.id || '');
+    p.append('page_url', window.location.href);
+    p.append('page_title', document.title);
+    p.append('origin', origin);
+    if (LeadStreamPhone && LeadStreamPhone.nonce) {
+      p.append('nonce', LeadStreamPhone.nonce);
+      p.append('_ajax_nonce', LeadStreamPhone.nonce); // compatibility
+    }
+    try { sendSmart(getAjaxUrl(), p); } catch (error) { try { console.warn('LeadStream: sendSmart failed', error); } catch (e) { } }
 
     // 3) Visual feedback (optional)
     if (LeadStreamPhone.show_feedback) {
@@ -99,6 +132,20 @@
    * Setup phone tracking - clean and minimal
    */
   function initPhoneTracking() {
+    // Admin-only floating badge for quick confirmation
+    try {
+      if (LeadStreamPhone.debugBadge) {
+        const badge = document.createElement('div');
+        badge.id = 'ls-phone-badge';
+        badge.setAttribute('role', 'status');
+        badge.style.cssText = 'position:fixed;z-index:2147483647;bottom:12px;right:12px;background:#1d2327;color:#fff;padding:8px 10px;border-radius:6px;font:12px/1.4 -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.25)';
+        badge.innerHTML = '<strong>LeadStream</strong><br><span>Phone tracking active</span>';
+        document.body.appendChild(badge);
+        // Collapse badge slightly after a moment
+        setTimeout(() => { badge.style.opacity = '0.9'; }, 1200);
+      }
+    } catch (e) { }
+
     // 1) Track ALL tel: links automatically (no selectors needed)
     document.querySelectorAll('a[href^="tel:"]').forEach(element => {
       const href = element.href;

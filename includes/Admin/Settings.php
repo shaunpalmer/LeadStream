@@ -1932,6 +1932,7 @@ document.addEventListener('wpformsSubmit', function (event) {
         
         ?>
         <div class="leadstream-phone-tracking" style="max-width: 900px;">
+            <?php if (class_exists('LS\\Admin\\Health')) { \LS\Admin\Health::render_phone_panel(); } ?>
             <h2>📞 Phone Click Tracking</h2>
             <p>Track clicks on phone numbers across your website. Monitor which numbers get the most calls and analyze user engagement patterns.</p>
             

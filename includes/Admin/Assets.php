@@ -691,19 +691,45 @@ JS;
      * Enqueue phone tracking script on frontend
      */
     public static function enqueue_phone_tracking() {
+        // Admin-only visibility: note when the enqueue hook runs (prints in <head>)
+        if (!is_admin()) {
+            add_action('wp_head', function () {
+                if (current_user_can('manage_options')) {
+                    echo "\n<!-- LeadStream: wp_enqueue_scripts fired; this is where we queue phone tracking (Assets::enqueue_phone_tracking) -->\n";
+                }
+            }, 0);
+        }
+
         // Only enqueue if phone tracking is enabled and numbers are configured
         $phone_enabled = get_option('leadstream_phone_enabled', 1);
         $phone_numbers = get_option('leadstream_phone_numbers', array());
         
         if (!$phone_enabled || empty($phone_numbers)) {
+            // Visibility: note why we didn't enqueue (debug/admin only)
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('LeadStream: phone-tracking not enqueued (disabled or no numbers)');
+            }
+            if (!is_admin()) {
+                add_action('wp_footer', function () {
+                    if (current_user_can('manage_options')) {
+                        echo "\n<!-- LeadStream: phone tracking not enqueued (disabled or no numbers) -->\n";
+                    }
+                });
+            }
             return;
         }
         
+        // Resolve asset URL from plugin root reliably
+        if (defined('LS_FILE')) {
+            $ls_base = LS_FILE;
+        } else {
+            $ls_base = dirname(dirname(__DIR__)) . '/leadstream-analytics-injector.php';
+        }
         wp_enqueue_script(
             'leadstream-phone-tracking',
-            plugin_dir_url(dirname(__DIR__)) . 'assets/js/phone-tracking.js',
+            plugins_url('assets/js/phone-tracking.js', $ls_base),
             ['jquery'],
-            '1.0.0',
+            '1.0.1',
             true
         );
         
@@ -727,7 +753,15 @@ JS;
         }
         $alt_numbers = array_values(array_unique(array_filter($alt_numbers)));
         
+                $debug_badge = (
+                    current_user_can('manage_options')
+                    && isset($_GET['ls_phone_debug'])
+                    && $_GET['ls_phone_debug'] == '1'
+                    && defined('WP_DEBUG') && WP_DEBUG
+                );
                 wp_localize_script('leadstream-phone-tracking', 'LeadStreamPhone', [
+            // Provide both camelCase and snake_case for maximum compatibility
+            'ajaxUrl' => admin_url('admin-ajax.php'),
             'ajax_url' => admin_url('admin-ajax.php'),
             'numbers' => $phone_numbers,
             'altNumbers' => $alt_numbers,
@@ -735,7 +769,8 @@ JS;
             'nonce' => wp_create_nonce('leadstream_phone_click'),
             'ga_id' => $ga_id,
             'debug' => defined('WP_DEBUG') && WP_DEBUG,
-            'show_feedback' => true
+            'show_feedback' => true,
+            'debugBadge' => $debug_badge ? 1 : 0
         ]);
 
                 // TEMP: callbar assets are enqueued by LS_Callbar::enqueue to avoid double-binding.
@@ -761,6 +796,15 @@ window.__LS_SMOKE__ = function(){
 };
 JS;
                     wp_add_inline_script('leadstream-phone-tracking', $smoke);
+                }
+
+                // Admin-only footer confirmation to verify enqueue on frontend
+                if (!is_admin()) {
+                    add_action('wp_footer', function () {
+                        if (current_user_can('manage_options')) {
+                            echo "\n<!-- LeadStream: phone tracking enqueued (handle: leadstream-phone-tracking, v=1.0.1) -->\n";
+                        }
+                    });
                 }
         }
     }

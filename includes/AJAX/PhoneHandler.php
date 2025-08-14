@@ -56,6 +56,21 @@ class PhoneHandler {
         // Normalize once
         $phone_normalized = preg_replace('/\D/', '', $phone);
 
+        // --- Belt & braces: lightweight server-side anti-duplication ---
+        try {
+            $vid    = isset($_COOKIE['ls_vid']) ? sanitize_text_field($_COOKIE['ls_vid']) : '';
+            $origin_key = $origin ?: (($element_type === 'callbar') ? 'callbar' : 'web');
+            $bucket = (string) floor(time() / 2); // 2-second bucket
+            $fp     = sha1($vid . '|' . $phone_normalized . '|' . $origin_key . '|' . $bucket);
+            $tkey   = 'ls_click_dupe_' . $fp;
+            if (get_transient($tkey)) {
+                wp_send_json_success(['ok' => true, 'dupe' => 1]);
+            }
+            set_transient($tkey, 1, 5); // hold briefly to collapse doubles
+        } catch (\Throwable $e) {
+            // no-op: never break tracking on anti-dupe failure
+        }
+
         // Verify this phone number is in our tracked list, unless it comes from the Call Bar
         $tracked_numbers = get_option('leadstream_phone_numbers', array());
         $is_tracked = false;
