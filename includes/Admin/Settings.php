@@ -255,7 +255,7 @@ class Settings {
         }
         
         // Handle form submissions FIRST (before any output)
-        $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'javascript';
+        $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'dashboard';
 
         // Handle Pretty Links Danger Zone exports (GET) before any output
         if ($current_tab === 'links' && isset($_GET['dz_export']) && in_array($_GET['dz_export'], ['link_clicks','links'], true)) {
@@ -386,39 +386,47 @@ class Settings {
                      alt="LeadStream Logo"
                      width="36" height="36"
                      style="width:36px; height:36px; border-radius:4px; object-fit:contain; flex-shrink:0;" />
-                <h1 style="margin:0; padding:0;">LeadStream: Advanced Analytics Injector</h1>
+                <h1 style="margin:0; padding:0;">LeadStream: Advanced Analytics Injector Pro</h1>
             </div>
             
             <!-- Tab Navigation -->
             <nav class="nav-tab-wrapper">
-                <a href="<?php echo add_query_arg('tab', 'javascript', admin_url('admin.php?page=leadstream-analytics-injector')); ?>" 
-                   class="nav-tab <?php echo $current_tab === 'javascript' ? 'nav-tab-active' : ''; ?>">
-                    📝 JavaScript Injection
-                </a>
-                <a href="<?php echo add_query_arg('tab', 'utm', admin_url('admin.php?page=leadstream-analytics-injector')); ?>" 
-                   class="nav-tab <?php echo $current_tab === 'utm' ? 'nav-tab-active' : ''; ?>">
-                    🔗 UTM Builder
-                </a>
-                <a href="<?php echo add_query_arg('tab', 'links', admin_url('admin.php?page=leadstream-analytics-injector')); ?>" 
-                   class="nav-tab <?php echo $current_tab === 'links' ? 'nav-tab-active' : ''; ?>">
-                    🎯 Pretty Links
-                </a>
-                <a href="<?php echo add_query_arg('tab', 'phone', admin_url('admin.php?page=leadstream-analytics-injector')); ?>" 
-                   class="nav-tab <?php echo $current_tab === 'phone' ? 'nav-tab-active' : ''; ?>">
-                    📞 Phone Tracking
-                </a>
-                <!-- Future analytics tab placeholder -->
-                <?php /* 
-                <a href="<?php echo add_query_arg('tab', 'analytics', admin_url('admin.php?page=leadstream-analytics-injector')); ?>" 
-                   class="nav-tab <?php echo $current_tab === 'analytics' ? 'nav-tab-active' : ''; ?>">
-                    📊 Analytics Dashboard
-                </a>
-                */ ?>
+                <?php
+                // Core tabs
+                $tabs = [
+                    'dashboard' => '📊 Dashboard',
+                    'javascript' => '📝 JavaScript Injection',
+                    'utm'        => '🔗 UTM Builder',
+                    'links'      => '🎯 Pretty Links',
+                    'phone'      => '📞 Phone Tracking',
+                ];
+                // Allow extensions (like License admin tab) to register additional tabs
+                $tabs = apply_filters('leadstream/admin/tabs', $tabs);
+
+                foreach ($tabs as $slug => $label) {
+                    $active = $current_tab === $slug ? 'nav-tab-active' : '';
+                    $url = add_query_arg('tab', $slug, admin_url('admin.php?page=leadstream-analytics-injector'));
+                    echo '<a href="' . esc_url($url) . '" class="nav-tab ' . $active . '">' . esc_html($label) . '</a>';
+                }
+                ?>
             </nav>
-            
+
             <?php
             // Display tab content
+            // Core tabs handled by the existing switch. Any other tab
+            // added by the 'leadstream/admin/tabs' filter should render
+            // itself via do_action('leadstream/admin/tab/{slug}'). This
+            // prevents filtered-but-non-core tabs from falling through to
+            // the javascript default.
+            $core_tabs = ['dashboard', 'javascript', 'utm', 'links', 'phone'];
+            if (!in_array($current_tab, $core_tabs, true)) {
+                // Fire action e.g. 'leadstream/admin/tab/license'
+                do_action('leadstream/admin/tab/' . $current_tab);
+            } else {
             switch ($current_tab) {
+                case 'dashboard':
+                    self::render_dashboard_tab();
+                    break;
                 case 'utm':
                     self::render_utm_tab();
                     break;
@@ -826,7 +834,8 @@ class Settings {
                     self::render_javascript_tab();
                     break;
             }
-            ?>
+                }
+                ?>
         </div>
         <?php
     }
@@ -1781,6 +1790,11 @@ document.addEventListener('wpformsSubmit', function (event) {
             $recording_url = isset($_POST['leadstream_phone_recording_url']) ? esc_url_raw(trim($_POST['leadstream_phone_recording_url'])) : '';
             update_option('leadstream_phone_recording_url', $recording_url);
 
+            // Save debug badge preference (admin-only frontend badge)
+            // When enabled, administrators visiting the site will see the phone-tracking debug badge.
+            $phone_debug_badge = isset($_POST['leadstream_phone_debug_badge']) ? 1 : 0;
+            update_option('leadstream_phone_debug_badge', $phone_debug_badge);
+
             // Sticky Call Bar settings
             $callbar_enabled = isset($_POST['leadstream_callbar_enabled']) ? 1 : 0;
             update_option('leadstream_callbar_enabled', $callbar_enabled);
@@ -1875,6 +1889,8 @@ document.addEventListener('wpformsSubmit', function (event) {
     $phone_numbers = get_option('leadstream_phone_numbers', array());
     $css_selectors = get_option('leadstream_phone_selectors', '');
     $phone_enabled = get_option('leadstream_phone_enabled', 1);
+    // Admin-controlled option: show debug badge on frontend for admins
+    $phone_debug_badge = get_option('leadstream_phone_debug_badge', 0);
     $recording_url = get_option('leadstream_phone_recording_url', '');
     // Call bar & DNI
     $callbar_enabled = (int) get_option('leadstream_callbar_enabled', 0);
@@ -1985,11 +2001,17 @@ document.addEventListener('wpformsSubmit', function (event) {
                 if ($c_fromnum) { $cw[] = 'from_number = %s'; $cp[] = $c_fromnum; }
                 if ($c_tonum)   { $cw[] = 'to_number = %s'; $cp[] = $c_tonum; }
                 $cw_sql = implode(' AND ', $cw);
-
+                
                 if ($c_export && current_user_can('manage_options')) {
                     if (function_exists('ob_get_level')) { while (ob_get_level()) { ob_end_clean(); } }
                     $csv_sql = "SELECT start_time, end_time, duration, provider, status, from_number, to_number, recording_url FROM {$calls_table} WHERE {$cw_sql} ORDER BY start_time DESC LIMIT %d";
-                    $rows = $wpdb->get_results($wpdb->prepare($csv_sql, array_merge($cp, [10000])), ARRAY_A);
+                    $csv_params = array_merge($cp, [10000]);
+                    // Use prepared statement only when there are placeholders/params. (Avoid WP warning when none.)
+                    if (!empty($csv_params)) {
+                        $rows = $wpdb->get_results($wpdb->prepare($csv_sql, ...$csv_params), ARRAY_A);
+                    } else {
+                        $rows = $wpdb->get_results($csv_sql, ARRAY_A);
+                    }
                     header('Content-Type: text/csv; charset=utf-8');
                     header('Content-Disposition: attachment; filename=leadstream-call-outcomes.csv');
                     $out = fopen('php://output', 'w');
@@ -1999,10 +2021,20 @@ document.addEventListener('wpformsSubmit', function (event) {
                 }
 
                 $c_count_sql = "SELECT COUNT(*) FROM {$calls_table} WHERE {$cw_sql}";
-                $c_total = (int) $wpdb->get_var($wpdb->prepare($c_count_sql, $cp));
+                // Only prepare when we have parameters; prepare() will warn if the query has no placeholders.
+                if (!empty($cp)) {
+                    $c_total = (int) $wpdb->get_var($wpdb->prepare($c_count_sql, ...$cp));
+                } else {
+                    $c_total = (int) $wpdb->get_var($c_count_sql);
+                }
                 $c_offset = ($c_p - 1) * $c_pp;
                 $c_data_sql = "SELECT id, start_time, end_time, duration, provider, status, from_number, to_number, recording_url FROM {$calls_table} WHERE {$cw_sql} ORDER BY start_time DESC LIMIT %d OFFSET %d";
-                $c_rows = $wpdb->get_results($wpdb->prepare($c_data_sql, array_merge($cp, [$c_pp, $c_offset])));
+                $c_params = array_merge($cp, [$c_pp, $c_offset]);
+                if (!empty($c_params)) {
+                    $c_rows = $wpdb->get_results($wpdb->prepare($c_data_sql, ...$c_params));
+                } else {
+                    $c_rows = $wpdb->get_results($c_data_sql);
+                }
 
                 $providers = $wpdb->get_col("SELECT DISTINCT provider FROM {$calls_table} ORDER BY provider");
                 $statuses  = $wpdb->get_col("SELECT DISTINCT status FROM {$calls_table} ORDER BY status");
@@ -2149,6 +2181,18 @@ document.addEventListener('wpformsSubmit', function (event) {
                     <p style="margin: 8px 0 0 0; color: #50575e; font-size: 13px;">
                         When enabled, all clicks on phone numbers will be tracked and sent to your analytics platforms.
                     </p>
+                </div>
+                
+                <!-- Debug badge toggle (admin only) -->
+                <div style="margin-bottom: 25px; padding: 12px; background: #fff8ec; border-left: 4px solid #f39c12; border-radius: 4px;">
+                    <label style="display:flex; align-items:center; gap:12px;">
+                        <span class="ls-switch">
+                            <input type="checkbox" name="leadstream_phone_debug_badge" value="1" <?php checked($phone_debug_badge, 1); ?> />
+                            <span class="ls-switch-slider" aria-hidden="true"></span>
+                        </span>
+                        <strong>Show debug badge for administrators</strong>
+                    </label>
+                    <p class="description" style="margin:8px 0 0 0; color:#50575e;">When enabled, administrators visiting the front-end will see a small debug badge confirming phone-tracking initialization. This is a front-end, non-persistent tool for debugging; it does not affect visitors.</p>
                 </div>
                 
                 <table class="form-table" role="presentation">
@@ -4805,5 +4849,20 @@ document.addEventListener('wpformsSubmit', function (event) {
             $total_clicks,
             $avg_clicks
         );
+    }
+
+    /**
+     * Render dashboard tab
+     */
+    private static function render_dashboard_tab() {
+        // Load dashboard classes
+        if (!class_exists('LeadStream\\Admin\\Dashboard\\Dashboard')) {
+            echo '<div class="notice notice-error"><p>Dashboard module not available.</p></div>';
+            return;
+        }
+
+        // Create dashboard instance and render
+        $dashboard = new \LeadStream\Admin\Dashboard\Dashboard();
+        $dashboard->render();
     }
 }

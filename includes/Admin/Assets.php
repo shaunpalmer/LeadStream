@@ -16,7 +16,10 @@ class Assets {
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_admin_scripts']);
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_utm_builder']);
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_pretty_links']);
-    add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_ls_admin']);
+        add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_ls_admin']);
+        add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_dashboard']);
+    // Frontend event listener for JS-injected events (dataLayer/gtag)
+    add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_event_listener']);
         
         // Frontend phone tracking
         add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_phone_tracking']);
@@ -229,6 +232,22 @@ JS;
             'ajaxurl' => admin_url('admin-ajax.php'),
             'nonce'   => wp_create_nonce('ls-admin')
         ]);
+
+        // Optional license tab UX enhancements (only enqueued on our settings page)
+    $license_js = plugin_dir_url(dirname(dirname(__FILE__))) . 'assets/js/license.js';
+    if (file_exists(plugin_dir_path(dirname(dirname(__FILE__))) . 'assets/js/license.js')) {
+            wp_enqueue_script(
+                'leadstream-license-js',
+                $license_js,
+                ['jquery'],
+                '1.0.0',
+                true
+            );
+            wp_localize_script('leadstream-license-js', 'LSLicense', [
+                'ajaxurl' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('ls-license')
+            ]);
+        }
 
     // WordPress native color picker for appearance fields
     wp_enqueue_style('wp-color-picker');
@@ -729,9 +748,14 @@ JS;
             'leadstream-phone-tracking',
             plugins_url('assets/js/phone-tracking.js', $ls_base),
             ['jquery'],
-            '1.0.1',
+            '1.0.99',
             true
         );
+
+        // Also ensure the generic event listener is available when phone tracking is active
+        if (!wp_script_is('leadstream-event-listener', 'enqueued')) {
+            wp_enqueue_script('leadstream-event-listener');
+        }
         
         // Get phone selectors
         $phone_selectors = get_option('leadstream_phone_selectors', '');
@@ -753,13 +777,36 @@ JS;
         }
         $alt_numbers = array_values(array_unique(array_filter($alt_numbers)));
         
-                $debug_badge = (
-                    current_user_can('manage_options')
-                    && isset($_GET['ls_phone_debug'])
-                    && $_GET['ls_phone_debug'] == '1'
-                    && defined('WP_DEBUG') && WP_DEBUG
-                );
-                wp_localize_script('leadstream-phone-tracking', 'LeadStreamPhone', [
+        // Admin-only debug badge
+        // Badge is admin-only - end users/public must never see it
+        // Stored setting enables it by default for admins
+        // GET override (?ls_phone_debug=1) enables it temporarily for admins
+        $stored_debug_badge = (int) get_option('leadstream_phone_debug_badge', 0);
+        $get_override       = isset($_GET['ls_phone_debug']) && $_GET['ls_phone_debug'] == '1';
+        
+        $debug_badge = false;
+        if ( current_user_can('manage_options') ) {
+            // Allow either stored setting or temporary GET override
+            if ( $stored_debug_badge || $get_override ) {
+                $debug_badge = true;
+            }
+        }
+        
+        // Server-authoritative admin flag for JS hardening
+        $is_admin = current_user_can('manage_options') ? 1 : 0;
+        
+        // Debug logging to track badge visibility
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log(sprintf(
+                'LS badge state → debugBadge:%d isAdmin:%d stored:%d override:%d',
+                $debug_badge ? 1 : 0,
+                $is_admin,
+                $stored_debug_badge ? 1 : 0,
+                $get_override ? 1 : 0
+            ));
+        }
+        
+        wp_localize_script('leadstream-phone-tracking', 'LeadStreamPhone', [
             // Provide both camelCase and snake_case for maximum compatibility
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'ajax_url' => admin_url('admin-ajax.php'),
@@ -770,7 +817,8 @@ JS;
             'ga_id' => $ga_id,
             'debug' => defined('WP_DEBUG') && WP_DEBUG,
             'show_feedback' => true,
-            'debugBadge' => $debug_badge ? 1 : 0
+            'debugBadge' => $debug_badge ? 1 : 0,
+            'isAdmin' => $is_admin
         ]);
 
                 // TEMP: callbar assets are enqueued by LS_Callbar::enqueue to avoid double-binding.
@@ -806,5 +854,153 @@ JS;
                         }
                     });
                 }
+        }
+
+        /**
+         * Register lightweight frontend assets that other enqueues can rely on
+         */
+        public static function register_frontend_assets() {
+            if (defined('LS_FILE')) {
+                $ls_base = LS_FILE;
+            } else {
+                $ls_base = dirname(dirname(__DIR__)) . '/leadstream-analytics-injector.php';
+            }
+
+            // Register the generic event listener. We localize but do not force-enqueue here.
+            wp_register_script(
+                'leadstream-event-listener',
+                plugins_url('assets/js/ls-event-listener.js', $ls_base),
+                [],
+                '1.0.0',
+                true
+            );
+
+            wp_localize_script('leadstream-event-listener', 'leadstream', [
+                'ajax_url' => admin_url('admin-ajax.php'),
+                'event_nonce' => wp_create_nonce('leadstream_event'),
+            ]);
+        }
+
+        /**
+         * Enqueue generic event listener for frontend pages
+         */
+        public static function enqueue_event_listener() {
+            // Only public pages; avoid loading in wp-admin
+            if (is_admin()) { return; }
+            if (!wp_script_is('leadstream-event-listener', 'registered')) {
+                self::register_frontend_assets();
+            }
+            wp_enqueue_script('leadstream-event-listener');
+        }
+
+        /**
+         * Enqueue dashboard assets on the dashboard tab
+         */
+        public static function enqueue_dashboard($hook) {
+            // Only on the LeadStream settings page
+            if ($hook !== 'toplevel_page_leadstream-analytics-injector') {
+                return;
+            }
+
+            // Only if we're on the dashboard tab
+            $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'dashboard';
+            if ($current_tab !== 'dashboard') {
+                return;
+            }
+
+            // Enqueue dashboard CSS and JS (use filemtime for cache-busting and plugin paths)
+            $plugin_url = plugin_dir_url(dirname(dirname(__FILE__)));
+            $plugin_dir = plugin_dir_path(dirname(dirname(__FILE__)));
+
+            $css_file = $plugin_dir . 'assets/css/ls-dashboard.css';
+            $css_ver = file_exists($css_file) ? filemtime($css_file) : '1.0.0';
+            wp_enqueue_style(
+                'leadstream-dashboard',
+                $plugin_url . 'assets/css/ls-dashboard.css',
+                ['leadstream-admin-css'],
+                $css_ver
+            );
+
+            // Minimal inline fallback to ensure dashboard is readable even if CSS fails to load
+            $fallback = '.ls-dashboard{max-width:1180px;margin:0 auto;}.ls-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;} .ls-tile{background:#fff;border:1px solid #eef2f7;border-radius:8px;padding:12px;} #ls-trend{height:260px;}';
+            wp_add_inline_style('leadstream-dashboard', $fallback);
+
+            // Ensure Chart.js is available for the trend chart (CDN)
+            wp_enqueue_script(
+                'chartjs',
+                'https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js',
+                [],
+                '3.9.1',
+                true
+            );
+
+            $js_file = $plugin_dir . 'assets/js/ls-dashboard.js';
+            $js_ver = file_exists($js_file) ? filemtime($js_file) : '1.0.0';
+            wp_enqueue_script(
+                'leadstream-dashboard',
+                $plugin_url . 'assets/js/ls-dashboard.js',
+                ['jquery', 'chartjs'],
+                $js_ver,
+                true
+            );
+
+            // Localize dashboard data (use Dashboard Data class when available)
+            $range = [ 'start' => date('Y-m-d', strtotime('-7 days')), 'end' => date('Y-m-d') ];
+            $kpis_loc = [];
+            $trend_loc = [ 'labels' => [], 'data' => [] ];
+
+            try {
+                if (class_exists('\LeadStream\Admin\Dashboard\Data')) {
+                    $ds = new \LeadStream\Admin\Dashboard\Data();
+                    $k = $ds->kpis();
+                    // Map to expected tile format using new structure from Data::kpis()
+                    $kpis_loc = [
+                        [ 'label' => 'Calls Today', 'value' => (int) ($k['calls_today']['value'] ?? get_option('leadstream_calls_today', 0)), 'delta_abs' => (int) ($k['calls_today']['delta_abs'] ?? 0), 'delta_pct' => (float) ($k['calls_today']['delta_pct'] ?? 0.0), 'state' => (($k['calls_today']['value'] ?? 0) > 0 ? 'green' : 'red') ],
+                        [ 'label' => 'Calls This Week', 'value' => (int) ($k['calls_week']['value'] ?? get_option('leadstream_calls_week', 0)), 'delta_abs' => (int) ($k['calls_week']['delta_abs'] ?? 0), 'delta_pct' => (float) ($k['calls_week']['delta_pct'] ?? 0.0), 'state' => 'green' ],
+                        [ 'label' => 'Forms Today', 'value' => (int) ($k['forms_today']['value'] ?? get_option('leadstream_forms_today', 0)), 'delta_abs' => (int) ($k['forms_today']['delta_abs'] ?? 0), 'delta_pct' => (float) ($k['forms_today']['delta_pct'] ?? 0.0), 'state' => 'orange' ],
+                    ];
+
+                    $trend = $ds->series_events(7);
+                    if (is_array($trend) && isset($trend['labels']) && isset($trend['data'])) {
+                        $trend_loc = $trend;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // fallback to safe hardcoded values below
+            }
+
+            if (empty($kpis_loc)) {
+                $kpis_loc = [
+                    [ 'label' => 'Calls Today', 'value' => (int) get_option('leadstream_calls_today', 0), 'delta_abs' => 0, 'delta_pct' => 0.0, 'state' => 'green' ],
+                    [ 'label' => 'Calls This Week', 'value' => (int) get_option('leadstream_calls_week', 0), 'delta_abs' => 0, 'delta_pct' => 0.0, 'state' => 'green' ],
+                    [ 'label' => 'Forms Today', 'value' => (int) get_option('leadstream_forms_today', 0), 'delta_abs' => 0, 'delta_pct' => 0.0, 'state' => 'orange' ],
+                ];
+            }
+
+            // Status can remain mostly static for now; keep existing messages
+            $status_loc = [
+                'phone' => [ 'state' => (get_option('leadstream_phone_enabled', 1) ? 'green' : 'red'), 'msg' => get_option('leadstream_phone_enabled', 1) ? 'Enabled' : 'Disabled' ],
+                'js' => [ 'state' => 'green', 'msg' => 'Listener active' ],
+                'links' => [ 'state' => 'orange', 'msg' => 'Enabled but no links created' ],
+                'qr' => [ 'state' => 'red', 'msg' => 'Feature disabled' ]
+            ];
+
+            wp_localize_script('leadstream-dashboard', 'LeadStreamDashboard', [
+                'range' => $range,
+                'kpis' => $kpis_loc,
+                'trend' => $trend_loc,
+                'status' => $status_loc,
+                'nonce' => wp_create_nonce('leadstream_dashboard')
+            ]);
+
+            // Admin-only footer comment for quick verification that dashboard assets were enqueued.
+            if (current_user_can('manage_options')) {
+                add_action('admin_footer', function() use ($current_tab) {
+                    $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+                    if ($screen && $screen->id === 'toplevel_page_leadstream-analytics-injector' && $current_tab === 'dashboard') {
+                        echo "\n<!-- LeadStream: dashboard assets enqueued (leadstream-dashboard, chartjs) -->\n";
+                    }
+                });
+            }
         }
     }

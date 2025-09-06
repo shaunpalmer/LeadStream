@@ -1,0 +1,142 @@
+The Best Method: Online/Activation-Based Licensing
+The industry standard for professional WordPress plugin licensing is an online activation system. This is how most major plugins (e.g., WooCommerce, Advanced Custom Fields Pro, Gravity Forms) operate.
+
+How It Works (The Concept):
+You set up a central license server (separate from your customer's WordPress sites).
+
+Your plugin contains code that asks the user for a license key (purchased from your website).
+
+The plugin sends this key, along with a unique site identifier (like the site URL), to your license server.
+
+The license server checks:
+
+Is the key valid?
+
+Is it active?
+
+How many activations (site_urls) does it already have?
+
+The server responds with a success or error message (e.g., "valid", "invalid", "max activations reached").
+
+The plugin stores an encrypted validation timestamp locally and periodically "phones home" (e.g., once every 24-48 hours) to re-validate the license.
+
+This solves the "moving to another server" problem elegantly:
+
+When a site is moved, its URL changes.
+
+On the new server, during the next periodic check, the plugin will send the new URL to your license server.
+
+The license server will see the new URL and, if the license allows it (e.g., it's a single-site license that has been deactivated on the old server, or it's a 5-site license with an open slot), it will deactivate the old URL and activate the new one.
+
+This can be fully automated or can trigger an email to the customer asking them to manage their activations from their account on your website.
+
+How to Implement This Properly
+You have two main paths: building your own system or using a third-party service.
+
+Option 1: Use a Third-Party Service (Highly Recommended)
+This is the fastest, most secure, and most reliable way unless you have very specific custom needs. These services handle the server infrastructure, security, payment gateway integration, and updates.
+
+Freemius: The leader in this space for WordPress. It handles licensing, payments, checkout, subscription management, plugin updates, and analytics all in one. It's a full-scale monetization platform. This is your best bet.
+
+Easy Digital Downloads (EDD) with Software Licensing extension: A very popular self-hosted option. You install EDD on your own WordPress site to act as your storefront and license server. It gives you more control but also requires you to manage and secure everything yourself.
+
+WPForms Lite (by WPBeginner) uses a similar system to what you described initially, but they have moved towards more online validation for their pro version.
+
+Why Freemius is often the best choice:
+
+Faster Integration: You can integrate it into your plugin in an afternoon.
+
+No Server Management: They handle all the security, scaling, and uptime of the license server.
+
+Built-in Updates: It seamlessly handles serving update packages (.zip files) only to paying customers.
+
+PCI Compliant: They handle payments securely, so you don't have to worry about PCI compliance.
+
+Option 2: Build Your Own License Server
+If you insist on a custom build, here is the architectural overview:
+
+1. The License Server (Your Central Server):
+
+This is a standalone script on your server (e.g., a PHP file like api.YourPlugin.com/validate.php).
+
+It should have a database table to store license keys, their status, and associated activations (site URLs).
+
+It communicates via a secure (HTTPS) API using wp_remote_post() from the plugin side.
+
+2. The Plugin Code (Simplified Example):
+
+php
+// Function to validate license
+function your_plugin_validate_license( $license_key, $action = 'check_license' ) {
+
+    $api_params = array(
+        'edd_action' => $action, // e.g., 'activate_license', 'check_license'
+        'license'    => $license_key,
+        'item_name'  => urlencode( 'Your Plugin Name' ), // Must match your product name on the server
+        'url'        => home_url(), // The unique site identifier
+        'beta'       => false,
+    );
+
+    // Call your custom license API
+    $response = wp_remote_post( 'https://yourlicense-server.com/', array(
+        'timeout'   => 15,
+        'sslverify' => false, // In a real plugin, this should be TRUE for production!
+        'body'      => $api_params
+    ) );
+
+    // Check for error in response
+    if ( is_wp_error( $response ) ) {
+        return false;
+    }
+
+    // Decode the license data
+    $license_data = json_decode( wp_remote_retrieve_body( $response ) );
+
+    // Update a local option with the license status and expiry
+    update_option( 'your_plugin_license_status', $license_data->license );
+    update_option( 'your_plugin_license_expires', $license_data->expires );
+
+    return $license_data;
+}
+
+// Hook to check license status periodically (e.g., daily)
+function your_plugin_daily_license_check() {
+    $license_key = get_option( 'your_plugin_license_key' );
+    if ( ! empty( $license_key ) ) {
+        your_plugin_validate_license( $license_key, 'check_license' );
+    }
+}
+add_action( 'your_plugin_daily_event', 'your_plugin_daily_license_check' );
+
+// Schedule the daily event
+function your_plugin_schedule_daily_check() {
+    if ( ! wp_next_scheduled( 'your_plugin_daily_event' ) ) {
+        wp_schedule_event( time(), 'daily', 'your_plugin_daily_event' );
+    }
+}
+register_activation_hook( __FILE__, 'your_plugin_schedule_daily_check' );
+3. Managing Server Moves:
+In the above code, notice the 'url' => home_url() parameter. This is the critical piece.
+
+When the site moves, home_url() changes.
+
+On the next daily check, it sends the new URL to your server.
+
+Your server's validation script should:
+
+Find the license key in its database.
+
+Check if the new URL is already in the list of activations.
+
+If it is not, and the license has free slots, add it and approve the request.
+
+If it is not, and the license has no free slots, send a response telling the plugin to deactivate and prompt the user to manage their sites on your customer portal.
+
+Recommendation
+Stop developing your 7-script and .db file system. It will become a maintenance nightmare.
+
+For 99% of developers: Use Freemius. It's cost-effective, incredibly robust, and saves you hundreds of hours of development and security headaches. It directly solves your "move server" problem automatically.
+
+If you need absolute control and have DevOps experience: Use Easy Digital Downloads + Software Licensing on your own server. Be prepared to handle security, updates, and server load.
+
+Avoid building a completely custom license server from scratch unless it's a core business competency. It's easy to get wrong and introduces significant security risks.

@@ -42,6 +42,93 @@ class Injector {
         if (!empty($footer_js) && $inject_footer) {
             echo '<!-- LeadStream: Custom Footer JS -->' . "\n";
             echo '<script type="text/javascript">' . "\n" . $footer_js . "\n" . '</script>' . "\n";
+                        // Add a small listener that captures pushed dataLayer/gtag events and forwards phone-like events to our AJAX handler
+                        $nonce = wp_create_nonce('leadstream_phone_click');
+                        $ajax_url = admin_url('admin-ajax.php');
+                        $listen_names = get_option('leadstream_listen_event_names', 'phone_click');
+                        $events = array_map('trim', explode(',', $listen_names));
+                        $events_json = wp_json_encode($events);
+                        $inline = <<<JS
+(function(){
+    if (window.LS_injection_listener) return; window.LS_injection_listener = true;
+    var cfg = {
+        ajax: %s,
+        nonce: %s,
+        events: %s
+    };
+
+    function normalizePhoneFromPayload(o){
+        if (!o) return '';
+        return (o.phone || o.original_phone || o.event_label || o.label || o.phone_number || '').toString();
+    }
+
+    function sendToAjax(payload){
+        try{
+            var phone = normalizePhoneFromPayload(payload);
+            if (!phone) return;
+            var body = new URLSearchParams();
+            body.append('action','leadstream_record_phone_click');
+            body.append('nonce', cfg.nonce);
+            body.append('phone', phone);
+            body.append('original_phone', payload.original || payload.original_phone || payload.event_label || '');
+            body.append('origin','injected_event');
+            body.append('element_type','injected_event');
+            body.append('page_url', window.location.href);
+            body.append('page_title', document.title || '');
+
+            // Try keepalive fetch first (works on modern browsers, good for unload)
+            fetch(cfg.ajax, { method: 'POST', body: body, keepalive: true }).catch(function(){ /* swallow */ });
+        }catch(e){/* swallow */}
+    }
+
+    function matchesEventName(name){
+        if (!name) return false; var n = String(name).toLowerCase();
+        for (var i=0;i<cfg.events.length;i++){ if (!cfg.events[i]) continue; if (n.indexOf(String(cfg.events[i]).toLowerCase()) !== -1) return true; }
+        return false;
+    }
+
+    function handleEventObject(obj){
+        try{
+            if (!obj) return;
+            var name = obj.event || obj.name || obj.action || '';
+            if (matchesEventName(name)) { sendToAjax(obj); }
+            // also allow flattened params: { event: 'phone_click', phone: '...' }
+        }catch(e){ }
+    }
+
+    // Wrap dataLayer.push
+    try{
+        if (window.dataLayer && Array.isArray(window.dataLayer)){
+            var origPush = window.dataLayer.push.bind(window.dataLayer);
+            window.dataLayer.push = function(){
+                try{ for (var i=0;i<arguments.length;i++){ handleEventObject(arguments[i]); } }catch(e){}
+                return origPush.apply(null, arguments);
+            };
+            // Scan any existing entries
+            for (var j=0;j<window.dataLayer.length;j++){ handleEventObject(window.dataLayer[j]); }
+        }
+    }catch(e){}
+
+    // Wrap gtag if present
+    try{
+        if (typeof window.gtag === 'function'){
+            var originalGtag = window.gtag.bind(window);
+            window.gtag = function(){
+                try{
+                    if (arguments.length >= 2 && arguments[0] === 'event'){
+                        var ename = arguments[1]; var params = arguments[2] || {};
+                        handleEventObject(Object.assign({event: ename}, params));
+                    }
+                }catch(e){}
+                return originalGtag.apply(null, arguments);
+            };
+        }
+    }catch(e){}
+
+})();
+JS;
+                        // Print with safe JSON-encoded pieces
+                        echo '<script type="text/javascript">' . sprintf($inline, wp_json_encode($ajax_url), wp_json_encode($nonce), $events_json) . '</script>' . "\n";
         }
     }
     

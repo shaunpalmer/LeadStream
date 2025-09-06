@@ -1,0 +1,114 @@
+LeadStream Dashboard
+
+Purpose: Marketing analytics view. Less about CRUD, more about attribution and performance.
+
+Existing Tabs (CRUD): Already have Pretty Links, Phone, Forms, QR.
+New Focus: Analytics layer across them.
+
+Core Sections (Tabs):
+
+Performance Overview (LS-OVW)
+
+KPI Tiles: Calls, Form Submits, CTR.
+
+Conversion Ratios (Call → Booking).
+
+Top 3 Sources.
+
+Source Analytics (LS-SRC)
+
+Break down by Google, Facebook, Direct, Returning.
+
+Mini sparklines for trends.
+
+Filter chips (period, channel).
+
+Lead Threads (LS-THREAD)
+
+Stitch clicks + forms + calls into timelines.
+
+Outcome tagging (Booked/Quote/Spam).
+
+Alerts & Reports (LS-ALERT)
+
+Smart alerts: sudden drops/spikes.
+
+Weekly digest generator.
+
+Functions Needed:
+
+FUNC-TILE_RENDER (KPI tiles).
+
+2. LeadStream Dashboard a Analytics
+
+Purpose: Marketing analytics view. Less about CRUD, more about attribution and performance.
+
+Existing Tabs (CRUD): Already have Pretty Links, Phone, Forms, QR.
+New Focus: Analytics layer across them.
+ build a Analytics
+Core Sections (Tabs):
+
+Performance Overview (LS-OVW)
+
+KPI Tiles: Calls, Form Submits, CTR.
+
+Conversion Ratios (Call → Booking).
+
+Top 3 Sources.
+
+Source Analytics (LS-SRC)
+
+Break down by Google, Facebook, Direct, Returning.
+
+Mini sparklines for trends.
+
+Filter chips (period, channel).
+
+Lead Threads (LS-THREAD)
+
+Stitch clicks + forms + calls into timelines.
+
+Outcome tagging (Booked/Quote/Spam).
+
+Alerts & Reports (LS-ALERT)
+
+Smart alerts: sudden drops/spikes.
+
+Weekly digest generator.
+
+Functions Needed:
+
+FUNC-TILE_RENDER (KPI tiles).
+
+FUNC-DELTA_CALC (compare vs last period).
+
+FUNC-TIMELINE (thread stitching).
+
+FUNC-TAGGING (lead outcomes).
+
+FUNC-ALERT (real-time anomaly alerts).
+
+FUNC-DIGEST (email digest).
+
+FUNC-DELTA_CALC (compare vs last period).
+
+FUNC-TIMELINE (thread stitching).
+
+FUNC-TAGGING (lead outcomes).
+
+FUNC-ALERT (real-time anomaly alerts).
+
+FUNC-DIGEST (email digest).
+
+
+LeadStream → prefix LS-XXX for features, FUNC-LS-XXX if specific.
+
+Crossover Functions: Some functions overlap (e.g. FUNC-SEARCH, FUNC-EXPORT, FUNC-DELTA_CALC). We keep them in a shared library so we’re not rewriting logic.
+
+Phase Approach:
+
+Phase 1: MVP dashboards (Overview tab with KPI tiles + filters).
+
+Phase 2: Add lead threads (LS)  
+
+Phase 3: Automation (alerts, digests, exports).

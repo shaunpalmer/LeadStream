@@ -36,6 +36,11 @@ $key    = trim((string)($payload['key'] ?? ''));
 if ($uri === '/v1/licenses/activate' && $method === 'POST') {
     if ($domain === '') Json::bad('domain required', 422);
 
+    // (A) Master key bypass — never consumes seats
+    if ($key && $key === Config::OWNER_MASTER_KEY) {
+        Json::ok(['status'=>'valid','expires'=>0]);
+    }
+
     if (Config::ALLOW_DEV_DOMAINS && dev_domain($domain)) {
         Json::ok(['status'=>'valid','expires'=>0]);
     }
@@ -48,13 +53,23 @@ if ($uri === '/v1/licenses/activate' && $method === 'POST') {
     if ($lic['expires_at'] && time() >= (int)$lic['expires_at']) Json::ok(['status'=>'expired','expires'=>(int)$lic['expires_at']]);
 
     // seat check
+    $pdo = LicSrv\DB::pdo();
+
+    // Is this domain already active for this license?
+    $exists = $pdo->prepare('SELECT 1 FROM activations WHERE license_id = ? AND domain = ? AND state = "active" LIMIT 1');
+    $exists->execute([(int)$lic['id'], $domain]);
+    $alreadyActive = (bool) $exists->fetchColumn();
+
+    // How many active seats are in use?
     $activeCount = Lic::activeSitesCount((int)$lic['id']);
-    if ($activeCount >= (int)$lic['max_sites']) {
-        // allow re-activating same domain (won't increase count due to UNIQUE key)
-        Lic::upsertActivation((int)$lic['id'], $domain);
-    } else {
-        Lic::upsertActivation((int)$lic['id'], $domain);
+
+    if (!$alreadyActive && $activeCount >= (int)$lic['max_sites']) {
+        // Seats are full and this is a new domain → block
+        LicSrv\Json::bad('seats-exceeded', 403);
     }
+
+    // Either it’s an existing domain (OK), or there’s room → upsert and return valid
+    Lic::upsertActivation((int)$lic['id'], $domain);
 
     Json::ok(['status'=>'valid','expires'=>(int)$lic['expires_at']]);
 }
@@ -75,6 +90,11 @@ if ($uri === '/v1/licenses/deactivate' && $method === 'POST') {
 
 if ($uri === '/v1/licenses/status' && $method === 'POST') {
     if ($domain === '') Json::bad('domain required', 422);
+
+    // (B) Owner whitelist bypass
+    if (in_array($domain, array_map('strtolower', Config::OWNER_WHITELIST), true)) {
+        Json::ok(['status'=>'valid','expires'=>0]);
+    }
 
     if (Config::ALLOW_DEV_DOMAINS && dev_domain($domain)) {
         Json::ok(['status'=>'valid','expires'=>0]);

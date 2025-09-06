@@ -1,5 +1,65 @@
 (function () {
   'use strict';
+
+  // ==== LeadStream admin-only badge hard guard ====
+  // Absolutely never show badge to public visitors.
+  (function () {
+    const ls = window.LeadStreamPhone || {};
+    const isAdmin = Number(ls.isAdmin) === 1;
+    const allowBadge = isAdmin && Number(ls.debugBadge) === 1;
+
+    // DEBUG: Log badge decision for troubleshooting
+    console.log('LS Badge Guard:', { isAdmin, debugBadge: Number(ls.debugBadge), allowBadge });
+
+    // If something already injected the badge, nuke it unless both gates pass.
+    const stray = document.getElementById('ls-phone-badge');
+    if (!allowBadge && stray) {
+      console.log('LS Badge Guard: Removing stray badge');
+      try { stray.remove(); } catch (_) { /* noop */ }
+    }
+
+    // Global kill-switch for any badge code below.
+    if (!allowBadge) {
+      console.log('LS Badge Guard: Blocking badge render (not admin or debug disabled)');
+      // Ensure any later accidental calls do nothing.
+      window.__LS_RENDER_BADGE__ = function () { console.log('LS Badge Guard: Render blocked'); };
+      return;
+    }
+
+    console.log('LS Badge Guard: Allowing badge render');
+
+    // Only define the real renderer when allowed.
+    window.__LS_RENDER_BADGE__ = function renderLsBadge() {
+      console.log('LS Badge Render: Starting render...');
+      if (document.getElementById('ls-phone-badge')) {
+        console.log('LS Badge Render: Badge already exists, skipping');
+        return;
+      }
+
+      console.log('LS Badge Render: Creating badge element');
+      const wrap = document.createElement('div');
+      wrap.id = 'ls-phone-badge';
+      wrap.role = 'status';
+      wrap.style.cssText = 'position:fixed;z-index:2147483647;bottom:12px;right:12px;background:#1d2327;color:#fff;padding:8px 10px;border-radius:6px;font:12px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.25);min-width:120px;';
+      wrap.innerHTML = '<div><strong>LeadStream</strong><br><span>Phone tracking active</span></div>';
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ls-phone-badge-close';
+      btn.setAttribute('aria-label', 'Dismiss debug badge');
+      btn.style.cssText = 'background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;padding:0;position:absolute;top:6px;right:8px;line-height:1;';
+      btn.textContent = '×';
+      btn.addEventListener('click', () => wrap.remove());
+      wrap.appendChild(btn);
+
+      document.body.appendChild(wrap);
+      console.log('LS Badge Render: Badge created and appended');
+    };
+
+    // Render now (or let your existing code call __LS_RENDER_BADGE__ when ready)
+    window.__LS_RENDER_BADGE__();
+  })();
+
   // Resolve AJAX endpoint robustly across naming conventions
   function getAjaxUrl() {
     try {
@@ -133,18 +193,8 @@
    */
   function initPhoneTracking() {
     // Admin-only floating badge for quick confirmation
-    try {
-      if (LeadStreamPhone.debugBadge) {
-        const badge = document.createElement('div');
-        badge.id = 'ls-phone-badge';
-        badge.setAttribute('role', 'status');
-        badge.style.cssText = 'position:fixed;z-index:2147483647;bottom:12px;right:12px;background:#1d2327;color:#fff;padding:8px 10px;border-radius:6px;font:12px/1.4 -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.25)';
-        badge.innerHTML = '<strong>LeadStream</strong><br><span>Phone tracking active</span>';
-        document.body.appendChild(badge);
-        // Collapse badge slightly after a moment
-        setTimeout(() => { badge.style.opacity = '0.9'; }, 1200);
-      }
-    } catch (e) { }
+    // Badge rendering is now handled by the secure __LS_RENDER_BADGE__ function above
+    // which requires both isAdmin=1 AND debugBadge=1 from server-side localization
 
     // 1) Track ALL tel: links automatically (no selectors needed)
     document.querySelectorAll('a[href^="tel:"]').forEach(element => {
