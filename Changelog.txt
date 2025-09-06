@@ -1,3 +1,16 @@
+## 2.12.3 - Dashboard 14-Day Trend Chart + Data Normalization
+- ADDED: Interactive 14-day trend chart on Dashboard tab with Chart.js visualization
+- ADDED: Metric selector (Calls/Forms/Total Leads) with date range filters
+- ADDED: Real-time chart updates via JavaScript with professional styling
+- ENHANCED: Dashboard data layer now uses normalized ls_clicks table as single source of truth
+- ENHANCED: All database queries are null-safe with proper fallback handling
+- FIXED: Removed ghost table references (ls_phone_clicks, ls_forms) that caused empty results
+- ADDED: Sample data migration script with validation for testing and development
+- ENHANCED: KPI tiles now show accurate deltas with positive/negative indicators
+- POLISH: Chart features smooth animations, hover tooltips, and responsive design
+- TECHNICAL: Unified event tracking across phone, link, and form submissions in single table
+- COMPAT: Maintains backward compatibility with existing data structures
+
 ## 2.12.2 - Phone Tracking Baseline: Reliable Frontend Enqueue, Robust AJAX, Anti‑Dupe, Debug Gating
 - FIXED: Frontend enqueue for phone tracking script. Assets loader now initializes on both admin and public pages, ensuring `assets/js/phone-tracking.js` is present when phone tracking is enabled and numbers are configured.
 - ADDED: Admin-only HTML comments to verify lifecycle:
