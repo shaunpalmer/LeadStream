@@ -20,6 +20,12 @@ class PhoneHandler {
      */
     public static function record_phone_click() {
         // Verify nonce (accept current and legacy tokens for compatibility)
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            $dbg_origin = isset($_REQUEST['origin']) ? sanitize_text_field($_REQUEST['origin']) : '';
+            $dbg_orig_phone = isset($_REQUEST['original_phone']) ? sanitize_text_field($_REQUEST['original_phone']) : '';
+            $dbg_digits = isset($_REQUEST['phone']) ? preg_replace('/\D/', '', (string) $_REQUEST['phone']) : '';
+            error_log("LeadStream[PhoneHandler]: start origin={$dbg_origin} original_phone={$dbg_orig_phone} digits={$dbg_digits}");
+        }
         $nonce = $_POST['nonce'] ?? '';
         $valid_nonce = wp_verify_nonce($nonce, 'leadstream_phone_click') ||
                        wp_verify_nonce($nonce, 'leadstream_phone_nonce'); // legacy
@@ -27,15 +33,19 @@ class PhoneHandler {
             wp_send_json_error('Invalid security token');
             return;
         }
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('LeadStream[PhoneHandler]: nonce OK');
+        }
         
-        // Get data from improved frontend format
-        $phone = sanitize_text_field($_POST['phone'] ?? '');
-        $original_phone = sanitize_text_field($_POST['original_phone'] ?? '');
-        $element_type = sanitize_text_field($_POST['element_type'] ?? 'unknown');
-        $element_class = sanitize_text_field($_POST['element_class'] ?? '');
-        $element_id = sanitize_text_field($_POST['element_id'] ?? '');
-        $page_url = esc_url_raw($_POST['page_url'] ?? '');
-        $page_title = sanitize_text_field($_POST['page_title'] ?? '');
+    // Get data from improved frontend format
+    $phone = sanitize_text_field($_POST['phone'] ?? '');
+    $original_phone = sanitize_text_field($_POST['original_phone'] ?? '');
+    $origin = sanitize_text_field($_POST['origin'] ?? '');
+    $element_type = sanitize_text_field($_POST['element_type'] ?? 'unknown');
+    $element_class = sanitize_text_field($_POST['element_class'] ?? '');
+    $element_id = sanitize_text_field($_POST['element_id'] ?? '');
+    $page_url = esc_url_raw($_POST['page_url'] ?? '');
+    $page_title = sanitize_text_field($_POST['page_title'] ?? '');
         
         // Validate required data
         if (empty($phone)) {
@@ -43,22 +53,38 @@ class PhoneHandler {
             return;
         }
         
-        // Verify this phone number is in our tracked list
+        // Normalize once
+        $phone_normalized = preg_replace('/\D/', '', $phone);
+
+        // --- Belt & braces: lightweight server-side anti-duplication ---
+        try {
+            $vid    = isset($_COOKIE['ls_vid']) ? sanitize_text_field($_COOKIE['ls_vid']) : '';
+            $origin_key = $origin ?: (($element_type === 'callbar') ? 'callbar' : 'web');
+            $bucket = (string) floor(time() / 2); // 2-second bucket
+            $fp     = sha1($vid . '|' . $phone_normalized . '|' . $origin_key . '|' . $bucket);
+            $tkey   = 'ls_click_dupe_' . $fp;
+            if (get_transient($tkey)) {
+                wp_send_json_success(['ok' => true, 'dupe' => 1]);
+            }
+            set_transient($tkey, 1, 5); // hold briefly to collapse doubles
+        } catch (\Throwable $e) {
+            // no-op: never break tracking on anti-dupe failure
+        }
+
+        // Verify this phone number is in our tracked list, unless it comes from the Call Bar
         $tracked_numbers = get_option('leadstream_phone_numbers', array());
         $is_tracked = false;
-        
         foreach ($tracked_numbers as $tracked_number) {
-            $phone_normalized = preg_replace('/\D/', '', $phone);
             $tracked_normalized = preg_replace('/\D/', '', $tracked_number);
-            
-            if (strpos($phone_normalized, $tracked_normalized) !== false || 
-                strpos($tracked_normalized, $phone_normalized) !== false) {
+            if ($tracked_normalized === '') { continue; }
+            if (strpos($phone_normalized, $tracked_normalized) !== false || strpos($tracked_normalized, $phone_normalized) !== false) {
                 $is_tracked = true;
                 break;
             }
         }
-        
-        if (!$is_tracked) {
+        // Treat origin values from Call Bar as trusted: 'callbar', 'auto', 'shortcode', or element_type === 'callbar'
+        $is_callbar = ($element_type === 'callbar') || in_array(strtolower($origin), array('callbar','auto','shortcode'), true);
+        if (!$is_callbar && !$is_tracked) {
             wp_send_json_error('Phone number not in tracking list');
             return;
         }
@@ -78,22 +104,27 @@ class PhoneHandler {
         // Enhanced phone tracking metadata
         $meta_data = [
             'original_phone' => $original_phone,
-            'normalized_phone' => $phone,
+            'normalized_phone' => $phone_normalized,
             'element_type' => $element_type,
             'element_class' => $element_class,
             'element_id' => $element_id,
             'page_title' => $page_title,
+            'origin' => ($origin ?: ($element_type === 'callbar' ? 'callbar' : '')),
             'tracking_method' => 'leadstream_phone_v2', // Version tracking
             'click_timestamp' => time()
         ];
         
         // Insert with improved structure
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log("LeadStream[PhoneHandler]: inserting origin={$meta_data['origin']} digits={$phone_normalized} original_phone={$original_phone}");
+        }
         $result = $wpdb->insert(
             $wpdb->prefix . 'ls_clicks',
             [
                 'link_type' => 'phone',
-                'link_key' => $phone, // Already normalized digits from frontend
-                'target_url' => 'tel:' . $original_phone,
+                'link_key' => $phone_normalized, // normalized digits
+                // Store the posted original as-is (visible/dialed), no tel: prefix
+                'target_url' => $original_phone,
                 'ip_address' => $ip_address,
                 'user_agent' => $user_agent,
                 'user_id' => $user_id ?: null,
@@ -115,10 +146,37 @@ class PhoneHandler {
             wp_send_json_error('Database error');
             return;
         }
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('LeadStream[PhoneHandler]: insert OK id=' . (int) $wpdb->insert_id);
+        }
         
+        // Optional: Server-side GA4 Measurement Protocol event
+        $ga4_id     = get_option('leadstream_ga4_id');
+        $ga4_secret = get_option('leadstream_ga4_secret');
+        if (!empty($ga4_id) && !empty($ga4_secret)) {
+            $ga4_url = 'https://www.google-analytics.com/mp/collect?measurement_id=' . rawurlencode($ga4_id) . '&api_secret=' . rawurlencode($ga4_secret);
+            $ga4_payload = array(
+                'client_id' => (string) (isset($_COOKIE['_ga']) ? $_COOKIE['_ga'] : ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0')) . '.' . (string) time(),
+                'events' => array(array(
+                    'name' => 'phone_click',
+                    'params' => array(
+                        'event_category' => 'Phone',
+                        'event_label'    => $phone_normalized,
+                        'value'          => 1,
+                        'origin'         => $is_callbar ? ($origin ?: 'callbar') : ($origin ?: 'web'),
+                    ),
+                )),
+            );
+            wp_remote_post($ga4_url, array(
+                'headers' => array('Content-Type' => 'application/json'),
+                'body'    => wp_json_encode($ga4_payload),
+                'timeout' => 0.5,
+            ));
+        }
+
         // Log successful tracking for debugging
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log("LeadStream: Phone click recorded - {$original_phone} -> {$phone} on {$page_url}");
+            error_log("LeadStream: Phone click recorded - {$original_phone} -> {$phone_normalized} on {$page_url} (origin={$origin}|etype={$element_type})");
         }
         
         // Success response with enhanced data

@@ -1,6 +1,110 @@
 (function () {
   'use strict';
 
+  // ==== LeadStream admin-only badge hard guard ====
+  // Absolutely never show badge to public visitors.
+  (function () {
+    const ls = window.LeadStreamPhone || {};
+    const isAdmin = Number(ls.isAdmin) === 1;
+    const allowBadge = isAdmin && Number(ls.debugBadge) === 1;
+
+    // DEBUG: Log badge decision for troubleshooting
+    console.log('LS Badge Guard:', { isAdmin, debugBadge: Number(ls.debugBadge), allowBadge });
+
+    // If something already injected the badge, nuke it unless both gates pass.
+    const stray = document.getElementById('ls-phone-badge');
+    if (!allowBadge && stray) {
+      console.log('LS Badge Guard: Removing stray badge');
+      try { stray.remove(); } catch (_) { /* noop */ }
+    }
+
+    // Global kill-switch for any badge code below.
+    if (!allowBadge) {
+      console.log('LS Badge Guard: Blocking badge render (not admin or debug disabled)');
+      // Ensure any later accidental calls do nothing.
+      window.__LS_RENDER_BADGE__ = function () { console.log('LS Badge Guard: Render blocked'); };
+      return;
+    }
+
+    console.log('LS Badge Guard: Allowing badge render');
+
+    // Only define the real renderer when allowed.
+    window.__LS_RENDER_BADGE__ = function renderLsBadge() {
+      console.log('LS Badge Render: Starting render...');
+      if (document.getElementById('ls-phone-badge')) {
+        console.log('LS Badge Render: Badge already exists, skipping');
+        return;
+      }
+
+      console.log('LS Badge Render: Creating badge element');
+      const wrap = document.createElement('div');
+      wrap.id = 'ls-phone-badge';
+      wrap.role = 'status';
+      wrap.style.cssText = 'position:fixed;z-index:2147483647;bottom:12px;right:12px;background:#1d2327;color:#fff;padding:8px 10px;border-radius:6px;font:12px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.25);min-width:120px;';
+      wrap.innerHTML = '<div><strong>LeadStream</strong><br><span>Phone tracking active</span></div>';
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ls-phone-badge-close';
+      btn.setAttribute('aria-label', 'Dismiss debug badge');
+      btn.style.cssText = 'background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;padding:0;position:absolute;top:6px;right:8px;line-height:1;';
+      btn.textContent = '×';
+      btn.addEventListener('click', () => wrap.remove());
+      wrap.appendChild(btn);
+
+      document.body.appendChild(wrap);
+      console.log('LS Badge Render: Badge created and appended');
+    };
+
+    // Render now (or let your existing code call __LS_RENDER_BADGE__ when ready)
+    window.__LS_RENDER_BADGE__();
+  })();
+
+  // Resolve AJAX endpoint robustly across naming conventions
+  function getAjaxUrl() {
+    try {
+      if (window.LeadStreamPhone) {
+        return LeadStreamPhone.ajaxUrl || LeadStreamPhone.ajax_url || window.ajaxurl || '/wp-admin/admin-ajax.php';
+      }
+    } catch (e) { }
+    return window.ajaxurl || '/wp-admin/admin-ajax.php';
+  }
+
+  // Smart sender: try fetch with keepalive; fall back to sendBeacon when page hides
+  function sendSmart(url, params) {
+    var sent = false;
+    var body = (typeof params === 'string') ? params : String(new URLSearchParams(params));
+    try {
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body,
+        credentials: 'same-origin',
+        keepalive: true
+      }).then(function () { sent = true; }).catch(function () { });
+    } catch (e) { }
+    var onHide = function () {
+      try {
+        if (!sent && navigator.sendBeacon) {
+          navigator.sendBeacon(url, body);
+        }
+      } catch (e) { }
+    };
+    document.addEventListener('visibilitychange', onHide, { once: true });
+    window.addEventListener('pagehide', onHide, { once: true });
+  }
+  // Beacon helper with fetch fallback
+  function lsSend(url, fd) {
+    try {
+      if (navigator.sendBeacon) {
+        var params = new URLSearchParams();
+        fd.forEach(function (v, k) { params.append(k, v); });
+        return navigator.sendBeacon(url, params);
+      }
+    } catch (e) { /* fall through */ }
+    return fetch(url, { method: 'POST', body: fd });
+  }
+
   // Exit if no phone numbers to track
   if (!LeadStreamPhone || !LeadStreamPhone.numbers || !LeadStreamPhone.numbers.length) {
     return;
@@ -12,26 +116,43 @@
    * Optional CSS selectors for enhanced accuracy when needed
    */
 
-  // Get normalized phone numbers (digits only) from settings
-  const trackedNumbers = LeadStreamPhone.numbers.map(num => num.replace(/\D/g, ''));
-  const customSelectors = LeadStreamPhone.selectors ?
-    LeadStreamPhone.selectors.split('\n').filter(s => s.trim()) : [];
+  // Get normalized phone numbers (digits only) from settings for matching only
+  const trackedNumbers = (LeadStreamPhone.numbers || []).map(num => String(num).replace(/\D/g, ''));
+  // Optional alternate variants (national vs E.164) provided by PHP for better matching
+  const altNumbers = (LeadStreamPhone.altNumbers || []).map(num => String(num).replace(/\D/g, ''));
+  // Default to sane selectors when not provided
+  const selectorString = (LeadStreamPhone.selectors && LeadStreamPhone.selectors.trim()) ? LeadStreamPhone.selectors : 'a[href^="tel:"], .ls-callbar a';
+  const customSelectors = selectorString.split('\n').map(s => s.trim()).filter(Boolean);
 
   /**
    * Check if a phone number matches our tracked numbers
    */
   function isTrackedNumber(phoneString) {
-    const normalized = phoneString.replace(/\D/g, ''); // Strip to digits only
-    return trackedNumbers.some(tracked =>
-      normalized.includes(tracked) || tracked.includes(normalized)
-    );
+    const normalized = String(phoneString).replace(/\D/g, ''); // digits only for compare
+    const haystacks = trackedNumbers.concat(altNumbers);
+
+    const lastN = (s, n) => (s.length >= n ? s.slice(-n) : s);
+    const last7 = lastN(normalized, 7);
+    const last8 = lastN(normalized, 8);
+
+    return haystacks.some(tracked => {
+      if (!tracked) return false;
+      if (normalized === tracked) return true;
+      // Mutual containment (legacy)
+      if (normalized.includes(tracked) || tracked.includes(normalized)) return true;
+      // Trailing digit match (handles national vs international variants)
+      const t7 = lastN(tracked, 7);
+      const t8 = lastN(tracked, 8);
+      return (last7 && t7 && last7 === t7) || (last8 && t8 && last8 === t8);
+    });
   }
 
   /**
    * Send phone click to analytics and database
    */
   function recordPhoneClick(phoneNumber, element) {
-    const normalizedPhone = phoneNumber.replace(/\D/g, '');
+    const normalizedPhone = String(phoneNumber).replace(/\D/g, '');
+    const origin = (element && element.getAttribute && element.getAttribute('data-ls-origin')) || 'tel';
 
     // 1) Send to Google Analytics (GA4) if available
     if (window.gtag && LeadStreamPhone.ga_id) {
@@ -43,24 +164,22 @@
       });
     }
 
-    // 2) Send to WordPress database via modern fetch API
-    const formData = new FormData();
-    formData.append('action', 'leadstream_record_phone_click');
-    formData.append('phone', normalizedPhone);
-    formData.append('original_phone', phoneNumber);
-    formData.append('element_type', element.tagName.toLowerCase());
-    formData.append('element_class', element.className || '');
-    formData.append('element_id', element.id || '');
-    formData.append('page_url', window.location.href);
-    formData.append('page_title', document.title);
-    formData.append('nonce', LeadStreamPhone.nonce);
-
-    fetch(LeadStreamPhone.ajax_url, {
-      method: 'POST',
-      body: formData
-    }).catch(error => {
-      console.warn('LeadStream: Failed to record phone click:', error);
-    });
+    // 2) Send to WordPress database with smart sender (fetch keepalive + beacon on hide)
+    const p = new URLSearchParams();
+    p.append('action', 'leadstream_record_phone_click');
+    p.append('phone', normalizedPhone);
+    p.append('original_phone', phoneNumber);
+    p.append('element_type', element.tagName.toLowerCase());
+    p.append('element_class', element.className || '');
+    p.append('element_id', element.id || '');
+    p.append('page_url', window.location.href);
+    p.append('page_title', document.title);
+    p.append('origin', origin);
+    if (LeadStreamPhone && LeadStreamPhone.nonce) {
+      p.append('nonce', LeadStreamPhone.nonce);
+      p.append('_ajax_nonce', LeadStreamPhone.nonce); // compatibility
+    }
+    try { sendSmart(getAjaxUrl(), p); } catch (error) { try { console.warn('LeadStream: sendSmart failed', error); } catch (e) { } }
 
     // 3) Visual feedback (optional)
     if (LeadStreamPhone.show_feedback) {
@@ -73,6 +192,10 @@
    * Setup phone tracking - clean and minimal
    */
   function initPhoneTracking() {
+    // Admin-only floating badge for quick confirmation
+    // Badge rendering is now handled by the secure __LS_RENDER_BADGE__ function above
+    // which requires both isAdmin=1 AND debugBadge=1 from server-side localization
+
     // 1) Track ALL tel: links automatically (no selectors needed)
     document.querySelectorAll('a[href^="tel:"]').forEach(element => {
       const href = element.href;
@@ -81,6 +204,8 @@
       // Only track if this number is in our configuration
       if (isTrackedNumber(phoneNumber)) {
         element.addEventListener('click', () => {
+          // Tag origin for consistency
+          element.setAttribute('data-ls-origin', 'tel');
           recordPhoneClick(phoneNumber, element);
         });
 
@@ -114,6 +239,7 @@
 
           if (phoneNumber && isTrackedNumber(phoneNumber)) {
             element.addEventListener('click', () => {
+              element.setAttribute('data-ls-origin', 'tel');
               recordPhoneClick(phoneNumber, element);
             });
 

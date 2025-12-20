@@ -1,5 +1,9 @@
 {
   "devDependencies": {
-    "@playwright/test": "^1.54.1"
+    "@playwright/test": "^1.54.1",
+    "husky": "^9.1.7"
+  },
+  "scripts": {
+    "prepare": "husky"
   }
 }

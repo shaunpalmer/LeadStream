@@ -343,6 +343,85 @@
 .leadstream-phone-tracking .ls-btn-row .button { margin: 0 4px 4px 0; }
 .leadstream-phone-tracking .ls-acc-toggle.button { margin: 0 4px 4px 0; }
 
+/* Pagination styling for phone and call outcomes tables (reuse links table look) */
+.ls-phone-calls .tablenav .tablenav-pages,
+.ls-call-outcomes .tablenav .tablenav-pages {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links a,
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links span.current,
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links a,
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links span.current {
+  display: inline-block;
+  margin: 0 3px;
+  padding: 2px 8px;
+  border: 1px solid #dcdcde;
+  border-radius: 3px;
+  text-decoration: none;
+  color: #1d2327;
+  background: #fff;
+}
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links span.current,
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links span.current {
+  background: #f0f0f1;
+  font-weight: 600;
+}
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links a:hover,
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links a:hover {
+  background: #f6f7f7;
+}
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links a.first-page::before { content: "⏮"; margin-right: 4px; color: #1d2327; }
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links a.prev-page::before  { content: "◀"; margin-right: 4px; color: #1d2327; }
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links a.next-page::after  { content: "▶"; margin-left: 4px; color: #1d2327; }
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links a.last-page::after  { content: "⏭"; margin-left: 4px; color: #1d2327; }
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links a.first-page::before { content: "⏮"; margin-right: 4px; color: #1d2327; }
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links a.prev-page::before  { content: "◀"; margin-right: 4px; color: #1d2327; }
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links a.next-page::after  { content: "▶"; margin-left: 4px; color: #1d2327; }
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links a.last-page::after  { content: "⏭"; margin-left: 4px; color: #1d2327; }
+
+/* Ensure empty nav spans match WP look */
+.tablenav-pages .tablenav-pages-navspan.button.disabled {
+  background: #f6f7f7;
+  border: 1px solid #dcdcde;
+  color: #a7aaad;
+}
+
+/* Restore/force dashicon-based arrows if a reset nuked pseudo-elements. Also works for disabled spans. */
+.tablenav .tablenav-pages a.first-page:before,
+.tablenav .tablenav-pages .tablenav-pages-navspan.first-page:before {
+  content: "\f341\f341";
+  font: normal 20px/1 dashicons;
+}
+.tablenav .tablenav-pages a.prev-page:before,
+.tablenav .tablenav-pages .tablenav-pages-navspan.prev-page:before {
+  content: "\f341";
+  font: normal 20px/1 dashicons;
+}
+.tablenav .tablenav-pages a.next-page:before,
+.tablenav .tablenav-pages .tablenav-pages-navspan.next-page:before {
+  content: "\f345";
+  font: normal 20px/1 dashicons;
+}
+.tablenav .tablenav-pages a.last-page:before,
+.tablenav .tablenav-pages .tablenav-pages-navspan.last-page:before {
+  content: "\f345\f345";
+  font: normal 20px/1 dashicons;
+}
+.tablenav .tablenav-pages a:before,
+.tablenav .tablenav-pages .tablenav-pages-navspan:before {
+  color: inherit; /* follow text color so schemes work */
+}
+
+/* Prevent duplicate icons where earlier rules added Unicode on ::after */
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links a.next-page::after,
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links a.last-page::after,
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links a.next-page::after,
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links a.last-page::after {
+  content: none !important;
+}
+
 /* Simple responsive video */
 .ls-video-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border: 1px solid #dcdcde; border-radius: 6px; background:#000; }
 .ls-video-wrapper iframe, .ls-video-wrapper video { position: absolute; top:0; left:0; width:100%; height:100%; }

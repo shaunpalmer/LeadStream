@@ -64,10 +64,14 @@
 
   function createBar(targetNumber) {
     if (!targetNumber) return;
+    // If a server-rendered callbar already exists, do not add another
+    if (document.querySelector('.ls-callbar__btn')) return;
     var digits = targetNumber.replace(/\D/g, '');
     var bar = document.createElement('div');
-    bar.className = 'ls-callbar ls-callbar--' + (opts.position === 'top' ? 'top' : 'bottom');
-    bar.innerHTML = '<a class="ls-callbar__btn" href="tel:' + targetNumber + '" data-ls-phone="' + digits + '">\n' +
+    var pos = (opts.position === 'top' ? 'top' : 'bottom');
+    var align = (opts.align === 'left' || opts.align === 'right') ? opts.align : 'center';
+    bar.className = 'ls-callbar ls-callbar--' + pos + ' ls-callbar--align-' + align;
+    bar.innerHTML = '<a id="ls-callbar__btn" class="ls-callbar__btn" href="tel:' + targetNumber + '" data-ls-phone="' + digits + '" data-ls-original="' + targetNumber + '">\n' +
       '  <span class="ls-callbar__cta">' + (opts.cta || 'Call Now') + '</span>\n' +
       '  <span class="ls-callbar__num">' + targetNumber + '</span>\n' +
       '</a>';
@@ -76,6 +80,16 @@
     // Track click similar to phone-tracking.js
     var a = bar.querySelector('a');
     if (a) {
+      var sendBeacon = function (url, fd) {
+        try {
+          if (navigator.sendBeacon) {
+            var params = new URLSearchParams();
+            fd.forEach(function (v, k) { params.append(k, v); });
+            return navigator.sendBeacon(url, params);
+          }
+        } catch (e) { }
+        return fetch(url, { method: 'POST', body: fd });
+      };
       a.addEventListener('click', function () {
         try {
           if (window.gtag) {
@@ -84,15 +98,16 @@
           // Ajax to WP for logging
           var fd = new FormData();
           fd.append('action', 'leadstream_record_phone_click');
+          fd.append('nonce', opts.nonce);
           fd.append('phone', digits);
           fd.append('original_phone', targetNumber);
+          fd.append('origin', 'callbar');
           fd.append('element_type', 'callbar');
           fd.append('element_class', 'ls-callbar__btn');
           fd.append('element_id', '');
           fd.append('page_url', window.location.href);
           fd.append('page_title', document.title);
-          fd.append('nonce', opts.nonce);
-          fetch(opts.ajaxUrl, { method: 'POST', body: fd });
+          sendBeacon(opts.ajaxUrl, fd);
         } catch (e) { }
       });
     }
@@ -108,4 +123,56 @@
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else { init(); }
+})();
+
+(function () {
+  var data = (window.LeadStreamCallBarData || {});
+  function ready(fn) { if (document.readyState !== 'loading') { fn() } else { document.addEventListener('DOMContentLoaded', fn) } }
+
+  ready(function () {
+    if (window.__LS_CALLBAR_BOUND) return;
+    var a = document.querySelector('.ls-callbar__btn');
+    if (!a) return;
+
+    a.addEventListener('click', function () {
+      try {
+        var digits = a.getAttribute('data-ls-phone') || '';
+        var original = a.getAttribute('data-ls-original') || '';
+        var origin = a.getAttribute('data-ls-origin') || 'callbar';
+        var sendBeacon = function (url, fd) {
+          try {
+            if (navigator.sendBeacon) {
+              var params = new URLSearchParams();
+              fd.forEach(function (v, k) { params.append(k, v); });
+              return navigator.sendBeacon(url, params);
+            }
+          } catch (e) { }
+          return fetch(url, { method: 'POST', body: fd });
+        };
+        // GA4 (optional)
+        if (window.gtag) {
+          gtag('event', 'phone_click', {
+            event_category: 'Phone', event_label: digits, value: 1, origin: origin
+          });
+        }
+        // AJAX log
+        if (data.ajaxUrl && data.nonce) {
+          var fd = new FormData();
+          fd.append('action', 'leadstream_record_phone_click');
+          fd.append('nonce', data.nonce);
+          fd.append('phone', digits);
+          fd.append('original_phone', original);
+          fd.append('origin', origin);
+          // Provide element context for completeness
+          fd.append('element_type', 'callbar');
+          fd.append('element_class', 'ls-callbar__btn');
+          fd.append('element_id', 'ls-callbar__btn');
+          fd.append('page_url', window.location.href);
+          fd.append('page_title', document.title);
+          sendBeacon(data.ajaxUrl, fd);
+        }
+      } catch (e) { /* no-op */ }
+    }, { passive: true });
+    window.__LS_CALLBAR_BOUND = true;
+  });
 })();

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LeadStream Phone Tracking Test Page</title>
+    <title>LeadStream dashboard Tracking</title>
     <style>
         body { 
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
@@ -28,6 +28,12 @@
             padding: 20px;
             border-left: 4px solid #00a32a;
             background: #f0f8f0;
+        }
+        .link-section { /* same visual style as phone-section */
+            margin: 30px 0;
+            padding: 20px;
+            border-left: 4px solid #dba617;
+            background: #fff8ee;
         }
         .phone-link {
             display: inline-block;
@@ -110,8 +116,8 @@
 </head>
 <body>
     <div class="container">
-        <h1>📞 LeadStream Phone Tracking Test</h1>
-        <p><strong>This page tests phone click tracking with various phone number formats and custom elements.</strong></p>
+        <h1>📞 LeadStream Phone Tracking</h1>
+        <p><strong>Phone click tracking </strong></p>
         
         <div class="stats">
             <div class="stat-card">
@@ -127,7 +133,22 @@
                 <div class="stat-label">Custom Element Clicks</div>
             </div>
         </div>
-
+         <h1>🔗 LeadStream links Tracking</h1>
+        <p><strong>links click tracking</strong></p>
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="total-clicks-links">0</div>
+                <div class="stat-label">Total Test Clicks</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="links-clicks">0</div>
+                <div class="stat-label">Links Clicks</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="custom-clicks-links">0</div>
+                <div class="stat-label">Custom Element Clicks</div>
+            </div>
+        </div>
         <div class="phone-section">
             <h2>📱 Standard Tel: Links</h2>
             <p>These should be automatically tracked by LeadStream:</p>
@@ -153,7 +174,7 @@
             </div>
         </div>
 
-        <div class="phone-section">
+    <div class="link-section">
             <h2>🔗 Pretty Links Test</h2>
             <p>Test pretty link tracking (if any exist):</p>
             
@@ -180,9 +201,13 @@
     </div>
 
     <script>
-        let totalClicks = 0;
-        let phoneClicks = 0;
-        let customClicks = 0;
+    let totalClicks = 0;
+    let phoneClicks = 0;
+    let customClicks = 0;
+    // Separate counters for links section
+    let totalClicksLinks = 0;
+    let linksClicks = 0;
+    let customClicksLinks = 0;
 
         function log(message, type = 'INFO') {
             const timestamp = new Date().toLocaleTimeString();
@@ -196,6 +221,15 @@
             document.getElementById('total-clicks').textContent = totalClicks;
             document.getElementById('phone-clicks').textContent = phoneClicks;
             document.getElementById('custom-clicks').textContent = customClicks;
+        }
+
+        function updateStatsLinks() {
+            var elTotal = document.getElementById('total-clicks-links');
+            if (elTotal) elTotal.textContent = totalClicksLinks;
+            var elLinks = document.getElementById('links-clicks');
+            if (elLinks) elLinks.textContent = linksClicks;
+            var elCustom = document.getElementById('custom-clicks-links');
+            if (elCustom) elCustom.textContent = customClicksLinks;
         }
 
         function callPhone(number) {
@@ -260,8 +294,10 @@
             }
             
             if (e.target.classList.contains('pretty-link')) {
-                totalClicks++;
-                updateStats();
+                // Pretty link click - update the links counters and log
+                totalClicksLinks++;
+                linksClicks++;
+                updateStatsLinks();
                 log(`Pretty link clicked: ${e.target.href}`, 'SUCCESS');
                 log(`→ Would redirect through /l/ rewrite rule`, 'INFO');
             }

@@ -373,8 +373,11 @@ $phone_clicks_today = $wpdb->get_var($wpdb->prepare(
         numbers: <?php echo json_encode($phone_numbers); ?>,
         selectors: <?php echo json_encode($css_selectors); ?>,
         ajax_url: '<?php echo admin_url('admin-ajax.php'); ?>',
+        ajaxUrl: '<?php echo admin_url('admin-ajax.php'); ?>',
         nonce: '<?php echo wp_create_nonce('leadstream_phone_click'); ?>',
-        show_feedback: true
+        show_feedback: true,
+        debugBadge: <?php echo current_user_can('manage_options') ? '1' : '0'; ?>,
+        isAdmin: <?php echo current_user_can('manage_options') ? '1' : '0'; ?>
     };
     </script>
 </body>

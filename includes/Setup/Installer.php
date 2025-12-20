@@ -138,6 +138,27 @@ class Installer {
             ) $charset_collate;
         ";
         $result3 = dbDelta( $sql_calls );
+
+        // Events table for storing client-side events captured via AJAX
+        $sql_events = "
+            CREATE TABLE {$wpdb->prefix}ls_events (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                event_name VARCHAR(191) NOT NULL,
+                event_type VARCHAR(191) NOT NULL,
+                event_params LONGTEXT NOT NULL,
+                user_id BIGINT UNSIGNED NULL,
+                ip_address VARCHAR(45) DEFAULT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY event_type_idx (event_type),
+                KEY created_at_idx (created_at)
+            ) $charset_collate;
+        ";
+        $result4 = dbDelta( $sql_events );
+
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('LeadStream: dbDelta results - Events: ' . print_r($result4, true));
+        }
         
         if (defined('WP_DEBUG') && WP_DEBUG) {
             error_log('LeadStream: dbDelta results - Links: ' . print_r($result1, true));

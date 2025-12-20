@@ -73,7 +73,8 @@ wp-content/wp-cache-config.php
 *.psd
 *.ai
 
-# AI and custom instruction files
+# AI and custom instruction files (allow .copilotignore to be tracked)
+!.copilotignore
 *copilot*
 *ai*
 *custom-instruction*
@@ -83,3 +84,6 @@ wp-content/wp-cache-config.php
 
 Development notes concepts and code snippets.md
 project-notes/
+
+# License server generated keys (never commit)
+leadstream-licserver/scripts/keys_*.csv
