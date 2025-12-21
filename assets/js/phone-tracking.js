@@ -63,11 +63,14 @@
   // Resolve AJAX endpoint robustly across naming conventions
   function getAjaxUrl() {
     try {
-      if (window.LeadStreamPhone) {
-        return LeadStreamPhone.ajaxUrl || LeadStreamPhone.ajax_url || window.ajaxurl || '/wp-admin/admin-ajax.php';
+      if (window.LeadStreamConfig && window.LeadStreamConfig.ajaxUrl) {
+        return window.LeadStreamConfig.ajaxUrl;
       }
-    } catch (e) { }
-    return window.ajaxurl || '/wp-admin/admin-ajax.php';
+      if (window.LeadStreamPhone) {
+        return LeadStreamPhone.ajaxUrl || LeadStreamPhone.ajax_url || window.ajaxurl || null;
+      }
+    } catch (e) { /* noop */ }
+    return window.ajaxurl || null;
   }
 
   // Smart sender: try fetch with keepalive; fall back to sendBeacon when page hides
@@ -81,20 +84,20 @@
         body: body,
         credentials: 'same-origin',
         keepalive: true
-      }).then(function () { sent = true; }).catch(function () { });
+      }).then(function () { sent = true; }).catch(function () { /* noop */ });
     } catch (e) { }
     var onHide = function () {
       try {
         if (!sent && navigator.sendBeacon) {
           navigator.sendBeacon(url, body);
         }
-      } catch (e) { }
+      } catch (e) { /* noop */ }
     };
     document.addEventListener('visibilitychange', onHide, { once: true });
     window.addEventListener('pagehide', onHide, { once: true });
   }
   // Beacon helper with fetch fallback
-  function lsSend(url, fd) {
+  function _lsSend(url, fd) {
     try {
       if (navigator.sendBeacon) {
         var params = new URLSearchParams();
@@ -123,6 +126,155 @@
   // Default to sane selectors when not provided
   const selectorString = (LeadStreamPhone.selectors && LeadStreamPhone.selectors.trim()) ? LeadStreamPhone.selectors : 'a[href^="tel:"], .ls-callbar a';
   const customSelectors = selectorString.split('\n').map(s => s.trim()).filter(Boolean);
+
+  // ---- Minimal click context collector (attribution + environment) ----
+  const LS_LANDING_URL_KEY = 'ls_landing_page_url';
+  const LS_SESSION_START_KEY = 'ls_session_start_ms';
+
+  (function initLandingAndSession() {
+    try {
+      if (!localStorage.getItem(LS_LANDING_URL_KEY)) {
+        localStorage.setItem(LS_LANDING_URL_KEY, window.location.href);
+      }
+      if (!localStorage.getItem(LS_SESSION_START_KEY)) {
+        localStorage.setItem(LS_SESSION_START_KEY, String(Date.now()));
+      }
+    } catch (_) { /* noop */ }
+  })();
+
+  function _lsParseTracking(url) {
+    const out = {
+      utm_source: '',
+      utm_medium: '',
+      utm_campaign: '',
+      utm_term: '',
+      utm_content: '',
+      gclid: '',
+      fbclid: '',
+      msclkid: '',
+      ttclid: ''
+    };
+    try {
+      const u = new URL(url, window.location.origin);
+      Object.keys(out).forEach(k => {
+        const v = u.searchParams.get(k);
+        if (v) out[k] = String(v).slice(0, 255);
+      });
+    } catch (_) { /* noop */ }
+    return out;
+  }
+
+  function _lsGetDeviceType() {
+    try {
+      if (window.matchMedia && window.matchMedia('(pointer:coarse)').matches) return 'mobile';
+      const ua = (navigator && navigator.userAgent) ? navigator.userAgent : '';
+      if (/Mobi|Android|iPhone|iPad|iPod/i.test(ua)) return 'mobile';
+    } catch (_) { /* noop */ }
+    return 'desktop';
+  }
+
+  function _lsReadCookie(name) {
+    try {
+      var all = document.cookie || '';
+      var parts = all.split(';');
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i].trim();
+        if (!p) continue;
+        if (p.indexOf(name + '=') === 0) {
+          return decodeURIComponent(p.substring(name.length + 1));
+        }
+      }
+    } catch (_) { /* noop */ }
+    return '';
+  }
+
+  function _lsExtractGaKeys() {
+    var out = { ga_client_id: '', ga_session_id: '', ga_session_number: '' };
+    try {
+      var ga = _lsReadCookie('_ga');
+      if (ga) {
+        var p = String(ga).split('.');
+        if (p.length >= 4) {
+          out.ga_client_id = String(p[p.length - 2] + '.' + p[p.length - 1]).slice(0, 64);
+        }
+      }
+    } catch (_) { /* noop */ }
+
+    // Find any GA4 session cookie: _ga_* = GS1.1.<session_id>.<session_number>...
+    try {
+      var cookies = (document.cookie || '').split(';');
+      for (var i = 0; i < cookies.length; i++) {
+        var c = cookies[i].trim();
+        if (!c) continue;
+        if (c.indexOf('_ga_') !== 0) continue;
+        var eq = c.indexOf('=');
+        if (eq === -1) continue;
+        var val = decodeURIComponent(c.substring(eq + 1));
+        if (val.indexOf('GS1.') !== 0) continue;
+        var parts = String(val).split('.');
+        if (parts.length >= 4) {
+          var sid = parseInt(parts[2], 10);
+          var sn = parseInt(parts[3], 10);
+          if (sid && sid > 0) out.ga_session_id = String(sid);
+          if (sn && sn > 0) out.ga_session_number = String(sn);
+        }
+        break;
+      }
+    } catch (_) { /* noop */ }
+    return out;
+  }
+
+  /**
+   * LeadStream Instant GTM Push
+   * Fires synchronously before the browser handles the link.
+   */
+  function _lsBroadcastToGTM(clickContext) {
+    try {
+      window.dataLayer = window.dataLayer || [];
+      if (!Array.isArray(window.dataLayer) || typeof window.dataLayer.push !== 'function') return;
+      window.dataLayer.push({
+        event: 'ls_conversion',
+        ls_event_data: {
+          action: String(clickContext.link_type || 'phone'),
+          label: String(clickContext.link_key || ''),
+          location: String(clickContext.page_url || ''),
+          source: String(clickContext.utm_source || ''),
+          gclid: String(clickContext.gclid || '')
+        }
+      });
+    } catch (_) { /* noop */ }
+  }
+
+  function _lsGetClickContext() {
+    let landing = '';
+    let startMs = 0;
+    try {
+      landing = localStorage.getItem(LS_LANDING_URL_KEY) || '';
+      startMs = Number(localStorage.getItem(LS_SESSION_START_KEY) || 0);
+    } catch (_) { /* noop */ }
+
+    const now = Date.now();
+    const timeToClick = (startMs && now > startMs) ? (now - startMs) : 0;
+
+    const currentTracking = _lsParseTracking(window.location.href);
+    const landingTracking = landing ? _lsParseTracking(landing) : null;
+
+    const tracking = Object.assign({}, currentTracking);
+    if (landingTracking) {
+      Object.keys(tracking).forEach(k => {
+        if (!tracking[k] && landingTracking[k]) tracking[k] = landingTracking[k];
+      });
+    }
+
+    return Object.assign(tracking, {
+      landing_page: landing || '',
+      time_to_click_ms: timeToClick,
+      client_language: (navigator && navigator.language) ? String(navigator.language).slice(0, 32) : '',
+      viewport_w: window.innerWidth || 0,
+      viewport_h: window.innerHeight || 0,
+      device_type: _lsGetDeviceType()
+    }, _lsExtractGaKeys());
+  }
 
   /**
    * Check if a phone number matches our tracked numbers
@@ -154,14 +306,48 @@
     const normalizedPhone = String(phoneNumber).replace(/\D/g, '');
     const origin = (element && element.getAttribute && element.getAttribute('data-ls-origin')) || 'tel';
 
-    // 1) Send to Google Analytics (GA4) if available
-    if (window.gtag && LeadStreamPhone.ga_id) {
-      gtag('event', 'phone_click', {
-        event_category: 'Phone',
-        event_label: normalizedPhone,
-        phone_number: phoneNumber,
-        value: 1
-      });
+    // Stable-ish event id for cross-channel de-dupe (GTM + AJAX + server-side).
+    // Must be synchronous so it is included in the AJAX payload.
+    const eventId = (() => {
+      try {
+        const rand = Math.random().toString(16).slice(2);
+        const base = [
+          'phone_click',
+          normalizedPhone,
+          window.location.href,
+          Date.now(),
+          rand
+        ].join('|');
+        return base;
+      } catch (e) {
+        return String(Date.now());
+      }
+    })();
+
+    // 0) Broadcast to GTM dataLayer immediately (sync)
+    try {
+      const ctx0 = _lsGetClickContext();
+      _lsBroadcastToGTM(Object.assign({}, ctx0, {
+        link_type: 'phone',
+        link_key: normalizedPhone,
+        page_url: window.location.href,
+        origin: origin,
+        event_id: eventId
+      }));
+    } catch (_) { /* noop */ }
+
+    // 1) Client GA4 (optional): if GTM dataLayer exists, assume container can forward and skip gtag().
+    const hasDataLayer = Array.isArray(window.dataLayer) && typeof window.dataLayer.push === 'function';
+    if (!hasDataLayer && window.gtag && LeadStreamPhone.ga_id) {
+      try {
+        gtag('event', 'phone_click', {
+          event_category: 'Phone',
+          event_label: normalizedPhone,
+          phone_number: phoneNumber,
+          value: 1,
+          event_id: eventId
+        });
+      } catch (_) { /* noop */ }
     }
 
     // 2) Send to WordPress database with smart sender (fetch keepalive + beacon on hide)
@@ -175,6 +361,19 @@
     p.append('page_url', window.location.href);
     p.append('page_title', document.title);
     p.append('origin', origin);
+    // Include event_id for server-side dedupe across strategies.
+    if (eventId) p.append('event_id', String(eventId));
+
+    // Enriched attribution + environment context
+    try {
+      const ctx = _lsGetClickContext();
+      Object.keys(ctx).forEach(k => {
+        if (ctx[k] !== null && ctx[k] !== undefined && String(ctx[k]) !== '') {
+          p.append(k, String(ctx[k]));
+        }
+      });
+    } catch (_) { /* noop */ }
+
     if (LeadStreamPhone && LeadStreamPhone.nonce) {
       p.append('nonce', LeadStreamPhone.nonce);
       p.append('_ajax_nonce', LeadStreamPhone.nonce); // compatibility
@@ -232,7 +431,7 @@
           // Try text content as fallback
           else {
             const text = element.textContent.trim();
-            if (/[\d\-\(\)\+\.\s]{10,}/.test(text)) {
+            if (/[\d\-()\.\+\s]{10,}/.test(text)) {
               phoneNumber = text;
             }
           }
