@@ -7,6 +7,8 @@ namespace LS\Setup;
  */
 class Installer {
 
+    private const SCHEMA_VERSION_OPTION = 'ls_schema_version';
+
     /**
      * Hook into plugin activation & deactivation.
      */
@@ -14,6 +16,78 @@ class Installer {
         // LS_FILE is defined in our main plugin file
         register_activation_hook( LS_FILE, [ __CLASS__, 'activate' ] );
         register_deactivation_hook( LS_FILE, [ __CLASS__, 'deactivate' ] );
+
+        // Keep table schemas up-to-date after plugin updates.
+        add_action( 'init', [ __CLASS__, 'maybe_upgrade_schema' ], 1 );
+    }
+
+    /**
+     * Ensure schemas are upgraded after plugin updates.
+     */
+    public static function maybe_upgrade_schema(): void {
+        if ( ! defined( 'LS_VERSION' ) ) {
+            return;
+        }
+
+        $stored = get_option( self::SCHEMA_VERSION_OPTION, '0.0.0' );
+        if ( is_string( $stored ) && version_compare( $stored, LS_VERSION, '>=' ) && ! self::schema_requires_migration() ) {
+            return;
+        }
+
+        try {
+            self::create_tables();
+            self::migrate_existing_tables();
+            update_option( self::SCHEMA_VERSION_OPTION, LS_VERSION, true );
+        } catch ( \Throwable $e ) {
+            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                error_log( 'LeadStream: Schema upgrade error - ' . $e->getMessage() );
+            }
+        }
+    }
+
+    /**
+     * Determine whether a migration should run even when the stored schema version
+     * matches the plugin version.
+     */
+    private static function schema_requires_migration(): bool {
+        global $wpdb;
+
+        $table_name = $wpdb->prefix . 'ls_clicks';
+        $table_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) );
+        if ( $table_exists !== $table_name ) {
+            return true;
+        }
+
+        $required_columns = array(
+            'origin',
+            'source',
+            'utm_source',
+            'utm_medium',
+            'utm_campaign',
+            'utm_term',
+            'utm_content',
+            'gclid',
+            'fbclid',
+            'msclkid',
+            'ttclid',
+            'ga_client_id',
+            'ga_session_id',
+            'ga_session_number',
+        );
+
+        foreach ( $required_columns as $col ) {
+            $exists = $wpdb->get_var(
+                $wpdb->prepare(
+                    "SHOW COLUMNS FROM {$table_name} LIKE %s",
+                    $col
+                )
+            );
+            if ( ! $exists ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -98,6 +172,20 @@ class Installer {
                 element_type  VARCHAR(32),
                 element_class VARCHAR(255),
                 element_id    VARCHAR(255),
+                origin       VARCHAR(64) NULL,
+                source       VARCHAR(64) NULL,
+                utm_source   VARCHAR(128) NULL,
+                utm_medium   VARCHAR(128) NULL,
+                utm_campaign VARCHAR(191) NULL,
+                utm_term     VARCHAR(191) NULL,
+                utm_content  VARCHAR(191) NULL,
+                gclid        VARCHAR(191) NULL,
+                fbclid       VARCHAR(191) NULL,
+                msclkid      VARCHAR(191) NULL,
+                ttclid       VARCHAR(191) NULL,
+                ga_client_id VARCHAR(64) NULL,
+                ga_session_id BIGINT UNSIGNED NULL,
+                ga_session_number INT UNSIGNED NULL,
                 meta_data     TEXT,
                 PRIMARY KEY (id),
                 KEY link_idx (link_id),
@@ -106,6 +194,11 @@ class Installer {
                 KEY clicked_at_idx (clicked_at),
                 KEY click_date_idx (click_date),
                 KEY click_datetime_idx (click_datetime),
+                KEY origin_idx (origin),
+                KEY gclid_idx (gclid),
+                KEY utm_campaign_idx (utm_campaign),
+                KEY ga_client_id_idx (ga_client_id),
+                KEY ga_session_id_idx (ga_session_id),
                 CONSTRAINT fk_ls_clicks_link
                     FOREIGN KEY (link_id)
                     REFERENCES {$wpdb->prefix}ls_links(id)
@@ -213,6 +306,44 @@ class Installer {
             $wpdb->query("ALTER TABLE {$table_name} ADD COLUMN link_key VARCHAR(255) NULL AFTER link_type");
             if (defined('WP_DEBUG') && WP_DEBUG) {
                 error_log('LeadStream: Added link_key column');
+            }
+        }
+
+        // Marketing params + origin/source + GA session keys.
+        $columns = array(
+            'origin'            => "ALTER TABLE {$table_name} ADD COLUMN origin VARCHAR(64) NULL AFTER element_id",
+            'source'            => "ALTER TABLE {$table_name} ADD COLUMN source VARCHAR(64) NULL AFTER origin",
+            'utm_source'        => "ALTER TABLE {$table_name} ADD COLUMN utm_source VARCHAR(128) NULL AFTER source",
+            'utm_medium'        => "ALTER TABLE {$table_name} ADD COLUMN utm_medium VARCHAR(128) NULL AFTER utm_source",
+            'utm_campaign'      => "ALTER TABLE {$table_name} ADD COLUMN utm_campaign VARCHAR(191) NULL AFTER utm_medium",
+            'utm_term'          => "ALTER TABLE {$table_name} ADD COLUMN utm_term VARCHAR(191) NULL AFTER utm_campaign",
+            'utm_content'       => "ALTER TABLE {$table_name} ADD COLUMN utm_content VARCHAR(191) NULL AFTER utm_term",
+            'gclid'             => "ALTER TABLE {$table_name} ADD COLUMN gclid VARCHAR(191) NULL AFTER utm_content",
+            'fbclid'            => "ALTER TABLE {$table_name} ADD COLUMN fbclid VARCHAR(191) NULL AFTER gclid",
+            'msclkid'           => "ALTER TABLE {$table_name} ADD COLUMN msclkid VARCHAR(191) NULL AFTER fbclid",
+            'ttclid'            => "ALTER TABLE {$table_name} ADD COLUMN ttclid VARCHAR(191) NULL AFTER msclkid",
+            'ga_client_id'      => "ALTER TABLE {$table_name} ADD COLUMN ga_client_id VARCHAR(64) NULL AFTER ttclid",
+            'ga_session_id'     => "ALTER TABLE {$table_name} ADD COLUMN ga_session_id BIGINT UNSIGNED NULL AFTER ga_client_id",
+            'ga_session_number' => "ALTER TABLE {$table_name} ADD COLUMN ga_session_number INT UNSIGNED NULL AFTER ga_session_id",
+        );
+        foreach ( $columns as $column => $alter_sql ) {
+            $exists = $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$table_name} LIKE %s", $column ) );
+            if ( ! $exists ) {
+                $wpdb->query( $alter_sql );
+            }
+        }
+
+        $indexes = array(
+            'origin_idx'        => "ALTER TABLE {$table_name} ADD INDEX origin_idx (origin)",
+            'gclid_idx'         => "ALTER TABLE {$table_name} ADD INDEX gclid_idx (gclid)",
+            'utm_campaign_idx'  => "ALTER TABLE {$table_name} ADD INDEX utm_campaign_idx (utm_campaign)",
+            'ga_client_id_idx'  => "ALTER TABLE {$table_name} ADD INDEX ga_client_id_idx (ga_client_id)",
+            'ga_session_id_idx' => "ALTER TABLE {$table_name} ADD INDEX ga_session_id_idx (ga_session_id)",
+        );
+        foreach ( $indexes as $key_name => $create_sql ) {
+            $idx = $wpdb->get_var( $wpdb->prepare( "SHOW INDEX FROM {$table_name} WHERE Key_name = %s", $key_name ) );
+            if ( ! $idx ) {
+                $wpdb->query( $create_sql );
             }
         }
         
