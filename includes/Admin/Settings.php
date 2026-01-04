@@ -5746,8 +5746,12 @@ endif;
 					<?php
 					// Handle test email sending
 					if ( isset( $_POST['send_test_email'] ) && check_admin_referer( 'ls_test_email', 'ls_test_email_nonce' ) ) {
-						$test_email = sanitize_email( $_POST['test_email_address'] );
-						if ( is_email( $test_email ) ) {
+						// Security: Verify user has manage_options capability
+						if ( ! current_user_can( 'manage_options' ) ) {
+							echo '<div class="notice notice-error inline" style="margin-top: 10px;"><p>✗ You do not have permission to send test emails.</p></div>';
+						} else {
+							$test_email = sanitize_email( $_POST['test_email_address'] );
+							if ( is_email( $test_email ) ) {
 							$from_name  = get_option( 'leadstream_email_from_name', get_bloginfo( 'name' ) );
 							$from_email = get_option( 'leadstream_email_from_email', get_option( 'admin_email' ) );
 							
@@ -5776,6 +5780,7 @@ endif;
 							echo '<div class="notice notice-error inline" style="margin-top: 10px;"><p>✗ Please enter a valid email address.</p></div>';
 						}
 					}
+				}
 					?>
 				</div>
 			</div>

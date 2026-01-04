@@ -288,9 +288,6 @@ class EmailNotifications {
 		$message .= '<p style="font-size: 12px; color: #666;">This is an automated message from ' . esc_html( get_bloginfo( 'name' ) ) . '</p>';
 		$message .= '</body></html>';
 
-		// Create plain text version as fallback
-		$plain_message = wp_strip_all_tags( $html_message );
-
 		// Set headers
 		$headers = array();
 		$headers[] = 'Content-Type: text/html; charset=UTF-8';
