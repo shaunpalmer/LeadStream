@@ -1,4 +1,5 @@
-![Alt logo](https://github.com/shaunpalmer/LeadStream/blob/main/assets/Lead-stream-logo-Small.png)
+![LeadStream Header](https://github.com/shaunpalmer/LeadStream/blob/main/assets/LeadStream.png?raw=true)
+
 
 \=== LeadStream: Universal Event & Pixel Injector ===
 Contributors: shaunpalmer
