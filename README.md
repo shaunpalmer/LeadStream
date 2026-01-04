@@ -17,7 +17,7 @@ LeadStream is a Streamlit web application designed for lead management and monit
   <img
     src="https://raw.githubusercontent.com/shaunpalmer/LeadStream/main/assets/Call Bar.png"
     alt="LeadStream"
-    width="700"
+    width="1100"
   />
 </p>
 ## Features
