@@ -31,6 +31,7 @@ class Bootstrap
         'Admin/Settings',
     'Admin/DashboardAdmin',
         'Admin/LinksDashboard',
+        'Admin/EmailNotifications',
         'Repository/LinksRepository',
         'Export/Exporters',
         'AJAX/UTMHandler',
