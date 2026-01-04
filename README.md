@@ -13,7 +13,13 @@
 
 ## Description
 LeadStream is a Streamlit web application designed for lead management and monitoring. It provides a front-end interface for users to manage, view, and monitor leads, and integrates with various AI and data services.
-
+<p align="center">
+  <img
+    src="https://raw.githubusercontent.com/shaunpalmer/LeadStream/main/assets/Call Bar.png"
+    alt="LeadStream"
+    width="700"
+  />
+</p>
 ## Features
 - Lead Management: Easily add, edit, and manage leads.
 - Dashboard: View and monitor lead activities and statuses.
