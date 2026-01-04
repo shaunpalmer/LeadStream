@@ -1,6 +1,4 @@
 ![LeadStream Header](https://github.com/shaunpalmer/LeadStream/blob/main/assets/LeadStream.png?raw=true)
-
-
 \=== LeadStream: Universal Event & Pixel Injector ===
 Contributors: shaunpalmer
 Tags: analytics, conversion tracking, pixels, events, facebook, tiktok, ga4, wpforms, contact form 7, gravity forms, lead generation, marketing, pixel
