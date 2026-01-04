@@ -248,6 +248,119 @@ class Settings {
 			'lead-tracking-js-settings-group',
 			'lead-tracking-js-settings-section'
 		);
+
+		// Email Notification Settings
+		register_setting(
+			'leadstream_email_settings_group',
+			'leadstream_enable_admin_notification',
+			array(
+				'type'    => 'integer',
+				'default' => 0,
+			)
+		);
+		register_setting(
+			'leadstream_email_settings_group',
+			'leadstream_admin_notification_email',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_email',
+			)
+		);
+		register_setting(
+			'leadstream_email_settings_group',
+			'leadstream_enable_lead_autoreply',
+			array(
+				'type'    => 'integer',
+				'default' => 0,
+			)
+		);
+		register_setting(
+			'leadstream_email_settings_group',
+			'leadstream_autoreply_subject',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+			)
+		);
+		register_setting(
+			'leadstream_email_settings_group',
+			'leadstream_autoreply_message',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'wp_kses_post',
+			)
+		);
+		register_setting(
+			'leadstream_email_settings_group',
+			'leadstream_email_from_name',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+			)
+		);
+		register_setting(
+			'leadstream_email_settings_group',
+			'leadstream_email_from_email',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_email',
+			)
+		);
+
+		add_settings_section(
+			'leadstream_email_settings_section',
+			'Email Notifications',
+			null,
+			'leadstream_email_settings_group'
+		);
+
+		add_settings_field(
+			'leadstream_enable_admin_notification_field',
+			'Admin Notifications',
+			array( __CLASS__, 'admin_notification_field_callback' ),
+			'leadstream_email_settings_group',
+			'leadstream_email_settings_section'
+		);
+
+		add_settings_field(
+			'leadstream_admin_notification_email_field',
+			'Admin Email Address',
+			array( __CLASS__, 'admin_email_field_callback' ),
+			'leadstream_email_settings_group',
+			'leadstream_email_settings_section'
+		);
+
+		add_settings_field(
+			'leadstream_enable_lead_autoreply_field',
+			'Lead Auto-Reply',
+			array( __CLASS__, 'lead_autoreply_field_callback' ),
+			'leadstream_email_settings_group',
+			'leadstream_email_settings_section'
+		);
+
+		add_settings_field(
+			'leadstream_autoreply_subject_field',
+			'Auto-Reply Subject',
+			array( __CLASS__, 'autoreply_subject_field_callback' ),
+			'leadstream_email_settings_group',
+			'leadstream_email_settings_section'
+		);
+
+		add_settings_field(
+			'leadstream_autoreply_message_field',
+			'Auto-Reply Message',
+			array( __CLASS__, 'autoreply_message_field_callback' ),
+			'leadstream_email_settings_group',
+			'leadstream_email_settings_section'
+		);
+
+		add_settings_field(
+			'leadstream_email_from_field',
+			'From Name & Email (Optional)',
+			array( __CLASS__, 'email_from_field_callback' ),
+			'leadstream_email_settings_group',
+			'leadstream_email_settings_section'
+		);
 	}
 
 	/** Determine if paid version flags are present (stubs). */
@@ -309,6 +422,85 @@ class Settings {
 		$checked = $val ? 'checked' : '';
 		echo '<label><input type="checkbox" name="leadstream_enable_heartbeat" value="1" ' . $checked . ' /> Enable frontend heartbeat (temporary testing)</label>';
 		echo '<p class="description">When enabled, the frontend script will send a lightweight ping to the server so admins can verify the loader executed. Intended for short-term testing; disable before distribution.</p>';
+	}
+
+	/**
+	 * Admin notification toggle field callback
+	 */
+	public static function admin_notification_field_callback() {
+		$enabled = (int) get_option( 'leadstream_enable_admin_notification', 0 );
+		$checked = $enabled ? 'checked' : '';
+		echo '<label><input type="checkbox" name="leadstream_enable_admin_notification" value="1" ' . esc_attr( $checked ) . ' /> Send email notifications to admin when a new lead is submitted</label>';
+		echo '<p class="description">Enable this to receive an email notification each time someone submits a form on your site.</p>';
+	}
+
+	/**
+	 * Admin email address field callback
+	 */
+	public static function admin_email_field_callback() {
+		$email = get_option( 'leadstream_admin_notification_email', get_option( 'admin_email' ) );
+		echo '<input type="email" name="leadstream_admin_notification_email" value="' . esc_attr( $email ) . '" class="regular-text" />';
+		echo '<p class="description">Email address where admin notifications will be sent. Defaults to WordPress admin email if left empty.</p>';
+	}
+
+	/**
+	 * Lead auto-reply toggle field callback
+	 */
+	public static function lead_autoreply_field_callback() {
+		$enabled = (int) get_option( 'leadstream_enable_lead_autoreply', 0 );
+		$checked = $enabled ? 'checked' : '';
+		echo '<label><input type="checkbox" name="leadstream_enable_lead_autoreply" value="1" ' . esc_attr( $checked ) . ' /> Send automatic thank-you email to leads</label>';
+		echo '<p class="description">Enable this to automatically send a thank-you email to people who submit forms (only if their email is captured).</p>';
+	}
+
+	/**
+	 * Auto-reply subject field callback
+	 */
+	public static function autoreply_subject_field_callback() {
+		$subject = get_option( 'leadstream_autoreply_subject', 'Thank you for your submission' );
+		echo '<input type="text" name="leadstream_autoreply_subject" value="' . esc_attr( $subject ) . '" class="regular-text" />';
+		echo '<p class="description">Subject line for the auto-reply email sent to leads.</p>';
+	}
+
+	/**
+	 * Auto-reply message field callback
+	 */
+	public static function autoreply_message_field_callback() {
+		$default_message = '<p>Thank you for contacting us. We have received your submission and will get back to you soon.</p>';
+		$message         = get_option( 'leadstream_autoreply_message', $default_message );
+		
+		wp_editor(
+			$message,
+			'leadstream_autoreply_message',
+			array(
+				'textarea_name' => 'leadstream_autoreply_message',
+				'textarea_rows' => 10,
+				'media_buttons' => false,
+				'teeny'         => true,
+				'quicktags'     => array( 'buttons' => 'strong,em,link' ),
+			)
+		);
+		echo '<p class="description">HTML message that will be sent to leads. Keep it simple and professional. A plain-text version will be automatically generated as a fallback.</p>';
+	}
+
+	/**
+	 * Email from name and email field callback
+	 */
+	public static function email_from_field_callback() {
+		$from_name  = get_option( 'leadstream_email_from_name', get_bloginfo( 'name' ) );
+		$from_email = get_option( 'leadstream_email_from_email', get_option( 'admin_email' ) );
+		
+		echo '<div style="margin-bottom: 10px;">';
+		echo '<label for="leadstream_email_from_name">From Name:</label><br>';
+		echo '<input type="text" id="leadstream_email_from_name" name="leadstream_email_from_name" value="' . esc_attr( $from_name ) . '" class="regular-text" />';
+		echo '</div>';
+		
+		echo '<div>';
+		echo '<label for="leadstream_email_from_email">From Email:</label><br>';
+		echo '<input type="email" id="leadstream_email_from_email" name="leadstream_email_from_email" value="' . esc_attr( $from_email ) . '" class="regular-text" />';
+		echo '</div>';
+		
+		echo '<p class="description">Optional: Set the "From" name and email address for notification emails. Defaults to your site name and admin email if left empty.</p>';
 	}
 
 	/**
@@ -542,6 +734,7 @@ class Settings {
 					'utm'        => '🔗 UTM Builder',
 					'links'      => '🎯 Pretty Links',
 					'phone'      => '📞 Phone Tracking',
+					'settings'   => '⚙️ Settings',
 				);
 				// Allow extensions (like License admin tab) to register additional tabs
 				$tabs = apply_filters( 'leadstream_admin_tabs', $tabs );
@@ -562,7 +755,7 @@ class Settings {
 			// itself via do_action('leadstream/admin/tab/{slug}'). This
 			// prevents filtered-but-non-core tabs from falling through to
 			// the javascript default.
-			$core_tabs = array( 'dashboard', 'javascript', 'utm', 'links', 'phone' );
+			$core_tabs = array( 'dashboard', 'javascript', 'utm', 'links', 'phone', 'settings' );
 			if ( ! in_array( $current_tab, $core_tabs, true ) ) {
 				// Fire action e.g. 'leadstream/admin/tab/license'
 				do_action( 'leadstream_admin_tab_' . $current_tab );
@@ -1012,6 +1205,9 @@ class Settings {
 						break;
 					case 'phone':
 						self::render_phone_tab();
+						break;
+					case 'settings':
+						self::render_settings_tab();
 						break;
 					/* Future analytics tab
 					case 'analytics':
@@ -5516,5 +5712,110 @@ endif;
 		// Create dashboard instance and render
 		$dashboard = new \LeadStream\Admin\Dashboard\Dashboard();
 		$dashboard->render();
+	}
+
+	/**
+	 * Render settings tab (Email Notifications)
+	 */
+	private static function render_settings_tab() {
+		?>
+		<div class="wrap">
+			<h2>Email Notification Settings</h2>
+			<p>Configure email notifications for lead submissions. These settings allow you to receive alerts when someone submits a form and optionally send automatic thank-you messages to your leads.</p>
+			
+			<form method="post" action="options.php">
+				<?php
+				settings_fields( 'leadstream_email_settings_group' );
+				do_settings_sections( 'leadstream_email_settings_group' );
+				submit_button( 'Save Email Settings' );
+				?>
+			</form>
+
+			<!-- Email Test Section -->
+			<div class="postbox" style="margin-top: 30px;">
+				<div class="postbox-header">
+					<h2 class="hndle">📧 Test Email Configuration</h2>
+				</div>
+				<div class="inside">
+					<p>Send a test email to verify your notification settings are working correctly.</p>
+					<form method="post" id="test-email-form">
+						<?php wp_nonce_field( 'ls_test_email', 'ls_test_email_nonce' ); ?>
+						<input type="email" name="test_email_address" placeholder="your-email@example.com" class="regular-text" required />
+						<button type="submit" name="send_test_email" class="button button-secondary">Send Test Email</button>
+					</form>
+					<?php
+					// Handle test email sending
+					if ( isset( $_POST['send_test_email'] ) && check_admin_referer( 'ls_test_email', 'ls_test_email_nonce' ) ) {
+						$test_email = sanitize_email( $_POST['test_email_address'] );
+						if ( is_email( $test_email ) ) {
+							$from_name  = get_option( 'leadstream_email_from_name', get_bloginfo( 'name' ) );
+							$from_email = get_option( 'leadstream_email_from_email', get_option( 'admin_email' ) );
+							
+							$subject = 'LeadStream Test Email';
+							$message = '<html><body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">';
+							$message .= '<h2>Test Email Successful!</h2>';
+							$message .= '<p>This is a test email from LeadStream to verify your email notification settings.</p>';
+							$message .= '<p><strong>From Name:</strong> ' . esc_html( $from_name ) . '<br>';
+							$message .= '<strong>From Email:</strong> ' . esc_html( $from_email ) . '</p>';
+							$message .= '<hr style="border: 1px solid #ddd; margin: 20px 0;">';
+							$message .= '<p style="font-size: 12px; color: #666;">If you received this email, your LeadStream email notifications are configured correctly!</p>';
+							$message .= '</body></html>';
+							
+							$headers = array();
+							$headers[] = 'Content-Type: text/html; charset=UTF-8';
+							if ( ! empty( $from_name ) && ! empty( $from_email ) && is_email( $from_email ) ) {
+								$headers[] = 'From: ' . $from_name . ' <' . $from_email . '>';
+							}
+							
+							if ( wp_mail( $test_email, $subject, $message, $headers ) ) {
+								echo '<div class="notice notice-success inline" style="margin-top: 10px;"><p>✓ Test email sent successfully to ' . esc_html( $test_email ) . '</p></div>';
+							} else {
+								echo '<div class="notice notice-error inline" style="margin-top: 10px;"><p>✗ Failed to send test email. Please check your server email configuration.</p></div>';
+							}
+						} else {
+							echo '<div class="notice notice-error inline" style="margin-top: 10px;"><p>✗ Please enter a valid email address.</p></div>';
+						}
+					}
+					?>
+				</div>
+			</div>
+
+			<!-- Documentation Section -->
+			<div class="postbox" style="margin-top: 20px;">
+				<div class="postbox-header">
+					<h2 class="hndle">📖 Documentation</h2>
+				</div>
+				<div class="inside">
+					<h3>How It Works</h3>
+					<p>LeadStream automatically captures form submissions from popular form plugins including:</p>
+					<ul>
+						<li><strong>WPForms</strong> - Automatically extracts email from email fields</li>
+						<li><strong>Contact Form 7</strong> - Detects common email field names</li>
+						<li><strong>Gravity Forms</strong> - Captures email from email field types</li>
+						<li><strong>Ninja Forms</strong> - Extracts email from email fields</li>
+					</ul>
+
+					<h3>Admin Notifications</h3>
+					<p>When enabled, you'll receive an email each time someone submits a form. The notification includes:</p>
+					<ul>
+						<li>Lead's email address (if provided)</li>
+						<li>Form name and source</li>
+						<li>Submission timestamp</li>
+					</ul>
+
+					<h3>Lead Auto-Reply</h3>
+					<p>When enabled, leads who provide their email address will automatically receive a thank-you message. You can customize the subject and message using HTML.</p>
+
+					<h3>Best Practices</h3>
+					<ul>
+						<li>Test your email configuration using the test email feature above</li>
+						<li>Keep auto-reply messages brief and professional</li>
+						<li>Use a recognizable "From" name (like your company name)</li>
+						<li>Ensure your "From" email address is authorized to send mail from your domain</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+		<?php
 	}
 }

@@ -239,6 +239,11 @@ class Bootstrap
                 \LS\REST\CallsWebhook::init();
             }
         }
+        
+        // Initialize email notifications (works in both admin and frontend)
+        if (class_exists('LS\\Admin\\EmailNotifications')) {
+            \LS\Admin\EmailNotifications::init();
+        }
 
         // Initialize legacy components
         if (class_exists('LS\\LS_Callbar')) {
