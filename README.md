@@ -1,6 +1,15 @@
-# LeadStream
+<p align="center">
+  <img
+    src="https://raw.githubusercontent.com/shaunpalmer/LeadStream/main/assets/LeadStream-772x250.png"
+    alt="LeadStream"
+    width="1100"
+  />
+</p>
 
-![](<https://raw.githubusercontent.com/shaunpalmer/LeadStream/main/assets/LeadStream-772x250.png>){width=1000}
+<h1 align="center">LeadStream</h1>
+<p align="center"><strong>Universal Event & Pixel Injector for WordPress</strong></p>
+
+---
 
 ## Description
 LeadStream is a Streamlit web application designed for lead management and monitoring. It provides a front-end interface for users to manage, view, and monitor leads, and integrates with various AI and data services.
