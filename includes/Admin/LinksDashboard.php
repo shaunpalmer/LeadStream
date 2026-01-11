@@ -470,21 +470,20 @@ class LinksDashboard extends \WP_List_Table {
      * Handle deleting pretty link
      */
     public static function handle_delete_pretty_link() {
-        // Get the link ID from query string
-        $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+        // Validate and sanitize the link ID first
+        $id = isset($_GET['id']) ? absint($_GET['id']) : 0;
         
-        // Verify nonce
-        if (!wp_verify_nonce($_GET['_wpnonce'], 'delete_link_' . $id)) {
+        if (!$id) {
+            wp_die('Invalid link ID');
+        }
+        
+        // Verify nonce (now that we have a valid ID)
+        if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'delete_link_' . $id)) {
             wp_die('Security check failed');
         }
 
         if (!current_user_can('manage_options')) {
             wp_die('Permission denied');
-        }
-
-        if (!$id) {
-            wp_redirect(admin_url('admin.php?page=leadstream-analytics-injector&tab=links&error=invalid_id'));
-            exit;
         }
 
         global $wpdb;
