@@ -488,6 +488,13 @@ class LinksDashboard extends \WP_List_Table {
 
         global $wpdb;
         
+        // Verify the link exists before attempting to delete
+        $link = \LS\Repository\LinksRepository::fetch_by_id($id);
+        if (!$link) {
+            wp_redirect(admin_url('admin.php?page=leadstream-analytics-injector&tab=links&error=link_not_found'));
+            exit;
+        }
+        
         // Delete the link
         $result = $wpdb->delete(
             $wpdb->prefix . 'ls_links',
@@ -495,7 +502,8 @@ class LinksDashboard extends \WP_List_Table {
             ['%d']
         );
 
-        if ($result === false) {
+        // Check if delete was successful (returns number of rows deleted, or false on error)
+        if ($result === false || $result === 0) {
             wp_redirect(admin_url('admin.php?page=leadstream-analytics-injector&tab=links&error=delete_failed'));
             exit;
         }
