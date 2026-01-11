@@ -23,8 +23,9 @@ class LinksDashboard extends \WP_List_Table {
         add_action('admin_post_edit_pretty_link', [__CLASS__, 'handle_edit_pretty_link']);
         add_action('admin_post_delete_pretty_link', [__CLASS__, 'handle_delete_pretty_link']);
         add_action('admin_post_ls_export_links', [__CLASS__, 'handle_export_links']);
-    // AJAX fragment for list table (Pretty Links)
-    add_action('wp_ajax_ls_links_table', [__CLASS__, 'ajax_links_table']);
+        
+        // AJAX fragment for list table (Pretty Links)
+        add_action('wp_ajax_ls_links_table', [__CLASS__, 'ajax_links_table']);
     }
 
     /**
