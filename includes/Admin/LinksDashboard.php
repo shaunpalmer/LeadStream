@@ -191,7 +191,7 @@ class LinksDashboard extends \WP_List_Table {
         
         return sprintf(
             '<a href="%s" class="button button-small">Edit</a> ' .
-            '<a href="%s" class="button button-small delete-link-btn" style="color:#b32d2e;" onclick="return confirm(\'Are you sure you want to delete this link? This action cannot be undone.\')">Delete</a>',
+            '<a href="%s" class="button button-small delete-link-btn ls-delete-btn" onclick="return confirm(\'Are you sure you want to delete this link? This action cannot be undone.\')">Delete</a>',
             esc_url($edit_url),
             esc_url($delete_url)
         );
@@ -502,8 +502,8 @@ class LinksDashboard extends \WP_List_Table {
             ['%d']
         );
 
-        // Check if delete was successful (returns number of rows deleted, or false on error)
-        if ($result === false || $result === 0) {
+        // Check for database errors (false means error, 0 or positive integer means success)
+        if ($result === false) {
             wp_redirect(admin_url('admin.php?page=leadstream-analytics-injector&tab=links&error=delete_failed'));
             exit;
         }
