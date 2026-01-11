@@ -1,3 +1,18 @@
+## 2.12.4 - Pretty Links Edit & Delete Actions
+- ADDED: Edit button in Pretty Links actions column for modifying existing links
+- ADDED: Delete button with JavaScript confirmation dialog for removing unwanted links
+- ADDED: Created date column to track when links were created
+- ENHANCED: Edit functionality now accessible directly from Pretty Links table
+- ENHANCED: Delete handler with atomic operation and comprehensive error handling
+- FIXED: Users can now correct mistakes (typos, double slashes) without recreating links
+- FIXED: Navigation after create/edit/delete keeps users in LeadStream admin area (no blank pages)
+- SECURITY: Enhanced delete validation with ID check before nonce verification
+- SECURITY: Uses absint() for ID sanitization to ensure only positive integers
+- POLISH: Delete button styling via CSS class (no inline styles)
+- POLISH: Leverages existing JavaScript handler for delete confirmation
+- TECHNICAL: Handles all wpdb->delete() result cases (false=error, 0=not found, >0=success)
+- TECHNICAL: Single atomic delete operation eliminates race conditions
+
 ## 2.12.3 - Dashboard 14-Day Trend Chart + Data Normalization
 - ADDED: Interactive 14-day trend chart on Dashboard tab with Chart.js visualization
 - ADDED: Metric selector (Calls/Forms/Total Leads) with date range filters
