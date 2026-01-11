@@ -191,7 +191,7 @@ class LinksDashboard extends \WP_List_Table {
         
         return sprintf(
             '<a href="%s" class="button button-small">Edit</a> ' .
-            '<a href="%s" class="button button-small delete-link-btn ls-delete-btn" onclick="return confirm(\'Are you sure you want to delete this link? This action cannot be undone.\')">Delete</a>',
+            '<a href="%s" class="button button-small delete-link-btn ls-delete-btn">Delete</a>',
             esc_url($edit_url),
             esc_url($delete_url)
         );
