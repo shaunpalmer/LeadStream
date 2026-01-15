@@ -1,43 +1,42 @@
 <?php
 namespace LS\Updates;
 
-use LS\License\Manager;
-
 defined('ABSPATH') || exit;
 
-/** Gated update feed */
+/**
+ * Updater - Bootstrap class for GitHub Updates
+ * 
+ * Initializes the GitHubUpdateManager singleton to handle
+ * automatic plugin updates from GitHub releases.
+ * 
+ * @package LeadStream
+ */
 final class Updater {
+    
+    /**
+     * Initialize the GitHub updater system
+     */
     public static function boot(): void {
-        add_filter('pre_set_site_transient_update_plugins', [__CLASS__, 'inject']);
+        if (!defined('LS_FILE')) {
+            return;
+        }
+
+        // Initialize on plugins_loaded to ensure WordPress is fully loaded
+        add_action('plugins_loaded', [__CLASS__, 'initialize'], 5);
     }
 
-    public static function inject($transient) {
-        if (!is_object($transient) || !Manager::pro()) return $transient;
-        $slug    = 'leadstream';
-        $plugin  = 'leadstream/leadstream.php';
-        $current = self::version();
+    /**
+     * Initialize the GitHubUpdateManager singleton
+     */
+    public static function initialize(): void {
+        // Load the GitHubUpdateManager class
+        require_once __DIR__ . '/GitHubUpdateManager.php';
 
-        $url = 'https://license.yourdomain.tld/v1/updates?slug=' . rawurlencode($slug) . '&version=' . rawurlencode($current);
-        $res = wp_remote_get($url, ['timeout'=>10]);
-        if (is_wp_error($res)) return $transient;
+        // Initialize the singleton with our GitHub repository
+        $repo_url = 'https://github.com/shaunpalmer/LeadStream/';
+        $plugin_file = LS_FILE;
+        $slug = 'leadstream-analytics-injector';
 
-        $data = json_decode((string) wp_remote_retrieve_body($res), true);
-        if (!is_array($data) || empty($data['new_version'])) return $transient;
-
-        $obj = (object) [
-            'slug'        => $slug,
-            'plugin'      => $plugin,
-            'new_version' => $data['new_version'],
-            'package'     => $data['package'] ?? '',
-            'url'         => $data['url'] ?? '',
-        ];
-        $transient->response[$plugin] = $obj;
-        return $transient;
-    }
-
-    private static function version(): string {
-        if (!function_exists('get_plugin_data')) require_once ABSPATH.'wp-admin/includes/plugin.php';
-        $data = get_plugin_data(WP_PLUGIN_DIR.'/leadstream/leadstream.php', false, false);
-        return $data['Version'] ?? '0.0.0';
+        GitHubUpdateManager::get_instance($repo_url, $plugin_file, $slug);
     }
 }
