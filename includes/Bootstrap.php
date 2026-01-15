@@ -56,6 +56,13 @@ class Bootstrap
     ];
 
     /**
+     * Update components
+     */
+    private static array $update_components = [
+        'Updates/Updater',
+    ];
+
+    /**
      * Legacy components (keep for backward compatibility)
      */
     private static array $legacy_components = [
@@ -75,6 +82,9 @@ class Bootstrap
 
         // Initialize core components
         self::load_core_components();
+
+        // Load update components early
+        self::load_update_components();
 
         // Load context-specific components
         if (is_admin()) {
@@ -141,6 +151,16 @@ class Bootstrap
             if (file_exists($file_path)) {
                 self::load_component($component);
             }
+        }
+    }
+
+    /**
+     * Load update components
+     */
+    private static function load_update_components(): void
+    {
+        foreach (self::$update_components as $component) {
+            self::load_component($component);
         }
     }
 
@@ -228,6 +248,11 @@ class Bootstrap
             // Initialize licensing if available
             if (class_exists('LS\\License\\AdminTab')) {
                 \LS\License\AdminTab::boot();
+            }
+
+            // Initialize updater
+            if (class_exists('LS\\Updates\\Updater')) {
+                \LS\Updates\Updater::boot();
             }
         } else {
             // Initialize frontend components

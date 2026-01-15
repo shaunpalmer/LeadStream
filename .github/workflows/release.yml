@@ -1,0 +1,116 @@
+name: Generate Plugin Release
+
+# Trigger on version tags (e.g., v2.12.3)
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Releasing version: $VERSION"
+
+      - name: Verify version in plugin file
+        run: |
+          PLUGIN_VERSION=$(grep "^Version:" leadstream-analytics-injector.php | awk '{print $2}')
+          TAG_VERSION="${{ steps.get_version.outputs.version }}"
+          echo "Plugin file version: $PLUGIN_VERSION"
+          echo "Git tag version: $TAG_VERSION"
+          if [ "$PLUGIN_VERSION" != "$TAG_VERSION" ]; then
+            echo "ERROR: Version mismatch!"
+            echo "Plugin file has $PLUGIN_VERSION but tag is $TAG_VERSION"
+            exit 1
+          fi
+
+      - name: Create plugin ZIP
+        run: |
+          # Create a clean build directory
+          mkdir -p build/leadstream-analytics-injector
+          
+          # Copy plugin files, excluding dev/test files
+          rsync -av --exclude='.git' \
+                    --exclude='.github' \
+                    --exclude='node_modules' \
+                    --exclude='tests' \
+                    --exclude='test-*' \
+                    --exclude='testing' \
+                    --exclude='*.md' \
+                    --exclude='project-notes' \
+                    --exclude='tools' \
+                    --exclude='scripts' \
+                    --exclude='leadstream-licserver' \
+                    --exclude='package*.json' \
+                    --exclude='.gitignore' \
+                    --exclude='.husky' \
+                    --exclude='phpunit.xml' \
+                    --exclude='*.log' \
+                    --exclude='tmp' \
+                    --exclude='temp' \
+                    --exclude='badge-security-test.js' \
+                    --exclude='debug-*.php' \
+                    --exclude='migrate-*.php' \
+                    ./ build/leadstream-analytics-injector/
+          
+          # Create the ZIP
+          cd build
+          zip -r ../leadstream-analytics-injector-${{ steps.get_version.outputs.version }}.zip leadstream-analytics-injector/
+          cd ..
+          
+          # Show ZIP contents for verification
+          echo "ZIP contents:"
+          unzip -l leadstream-analytics-injector-${{ steps.get_version.outputs.version }}.zip | head -50
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: leadstream-analytics-injector-${{ steps.get_version.outputs.version }}.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## LeadStream Analytics Injector v${{ steps.get_version.outputs.version }}
+            
+            ### 🚀 Installation
+            1. Download the ZIP file below
+            2. Go to WordPress Admin → Plugins → Add New → Upload Plugin
+            3. Choose the downloaded ZIP file
+            4. Click "Install Now" and then "Activate"
+            
+            ### 📦 What's Included
+            - Core plugin functionality
+            - Plugin Update Checker library for automatic updates
+            - All required dependencies
+            
+            ### 📋 Changelog
+            See commits since last release below.
+            
+            ### ⚙️ Requirements
+            - WordPress 5.0 or higher
+            - PHP 7.4 or higher
+            
+            ---
+            
+            **Note**: This plugin includes automatic update functionality. Once installed, future updates will be delivered automatically through the WordPress admin dashboard.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact for verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-zip
+          path: leadstream-analytics-injector-${{ steps.get_version.outputs.version }}.zip
+          retention-days: 30
