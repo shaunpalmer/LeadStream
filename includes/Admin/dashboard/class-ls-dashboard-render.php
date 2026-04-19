@@ -222,10 +222,10 @@ class Render {
         $logo = trailingslashit(LS_PLUGIN_URL) . 'assets/Lead-stream-logo-Small.png';
         $href = apply_filters('leadstream_dashboard_promo_href', 'https://projectstudios.co.nz/product-leadstream/');
         $title = apply_filters('leadstream_dashboard_promo_title', 'LeadStream Pro');
-        $headline = apply_filters('leadstream_dashboard_promo_headline', 'Free setup support is available for your LeadStream stack.');
-        $summary = apply_filters('leadstream_dashboard_promo_summary', 'Use this quick card to request architecture support or implementation help.');
-        $detail = apply_filters('leadstream_dashboard_promo_detail', 'We can help with tracking setup, dashboard tuning, and event architecture so your reporting stays clean and useful.');
-        $link_text = apply_filters('leadstream_dashboard_promo_link_text', 'Contact support');
+        $headline = apply_filters('leadstream_dashboard_promo_headline', 'See what LeadStream Pro can unlock for your pipeline.');
+        $summary = apply_filters('leadstream_dashboard_promo_summary', 'Explore the provision and features included in LeadStream Pro.');
+        $detail = apply_filters('leadstream_dashboard_promo_detail', 'Review what is included, how it works, and whether it fits your tracking and reporting workflow.');
+        $link_text = apply_filters('leadstream_dashboard_promo_link_text', 'View LeadStream Pro');
 
         echo '<section class="ls-promo-card" aria-label="LeadStream Pro product card">';
         echo '<div class="ls-promo-card__summary">';
