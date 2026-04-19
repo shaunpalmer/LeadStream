@@ -221,7 +221,7 @@ class Render {
     private function promo_card(): void {
         $logo = trailingslashit(LS_PLUGIN_URL) . 'assets/Lead-stream-logo-Small.png';
         $href = apply_filters('leadstream_dashboard_promo_href', 'https://projectstudios.co.nz/');
-        $title = apply_filters('leadstream_dashboard_promo_title', 'Need help architecting your lead flow?');
+        $title = apply_filters('leadstream_dashboard_promo_title', 'At Your Services (Pro)');
         $headline = apply_filters('leadstream_dashboard_promo_headline', 'Free setup support is available for your LeadStream stack.');
         $summary = apply_filters('leadstream_dashboard_promo_summary', 'Use this quick card to request architecture support or implementation help.');
         $detail = apply_filters('leadstream_dashboard_promo_detail', 'We can help with tracking setup, dashboard tuning, and event architecture so your reporting stays clean and useful.');
@@ -231,7 +231,7 @@ class Render {
         echo '<div class="ls-promo-card__summary">';
         echo '<img class="ls-promo-card__logo" src="' . esc_url($logo) . '" alt="LeadStream logo" width="40" height="40" />';
         echo '<div>';
-        echo '<h3 class="ls-promo-card__title">' . esc_html($title) . '</h3>';
+        echo '<h3 class="ls-promo-card__title"><a class="ls-promo-card__title-link" href="' . esc_url($href) . '" target="_blank" rel="noopener noreferrer">' . esc_html($title) . '</a></h3>';
         echo '<p class="ls-promo-card__headline">' . esc_html($headline) . '</p>';
         echo '</div>';
         echo '</div>';

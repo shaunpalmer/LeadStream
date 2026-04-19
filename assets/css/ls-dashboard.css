@@ -113,6 +113,14 @@
   font-size: 16px;
   color: #1d2327;
 }
+.ls-promo-card__title-link {
+  color: inherit;
+  text-decoration: none;
+}
+.ls-promo-card__title-link:hover,
+.ls-promo-card__title-link:focus {
+  text-decoration: underline;
+}
 .ls-promo-card__headline {
   margin: 4px 0 0 0;
   color: #385a7a;
