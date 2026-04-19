@@ -227,7 +227,7 @@ class Render {
         $detail = apply_filters('leadstream_dashboard_promo_detail', 'Review what is included, how it works, and whether it fits your tracking and reporting workflow.');
         $link_text = apply_filters('leadstream_dashboard_promo_link_text', 'View LeadStream Pro');
 
-        echo '<section class="ls-promo-card" aria-label="LeadStream Pro product card">';
+        echo '<section class="ls-promo-card" aria-label="LeadStream Pro product information and upgrade options">';
         echo '<div class="ls-promo-card__summary">';
         echo '<img class="ls-promo-card__logo" src="' . esc_url($logo) . '" alt="LeadStream logo" width="40" height="40" />';
         echo '<div>';
