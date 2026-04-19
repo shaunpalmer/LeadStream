@@ -220,8 +220,8 @@ class Render {
 
     private function promo_card(): void {
         $logo = trailingslashit(LS_PLUGIN_URL) . 'assets/Lead-stream-logo-Small.png';
-        $href = apply_filters('leadstream_dashboard_promo_href', 'https://projectstudios.co.nz/');
-        $title = apply_filters('leadstream_dashboard_promo_title', 'At Your Services (Pro)');
+        $href = apply_filters('leadstream_dashboard_promo_href', 'https://projectstudios.co.nz/product-leadstream/');
+        $title = apply_filters('leadstream_dashboard_promo_title', 'LeadStream Pro');
         $headline = apply_filters('leadstream_dashboard_promo_headline', 'Free setup support is available for your LeadStream stack.');
         $summary = apply_filters('leadstream_dashboard_promo_summary', 'Use this quick card to request architecture support or implementation help.');
         $detail = apply_filters('leadstream_dashboard_promo_detail', 'We can help with tracking setup, dashboard tuning, and event architecture so your reporting stays clean and useful.');
