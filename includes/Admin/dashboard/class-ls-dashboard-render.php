@@ -227,7 +227,7 @@ class Render {
         $detail = apply_filters('leadstream_dashboard_promo_detail', 'We can help with tracking setup, dashboard tuning, and event architecture so your reporting stays clean and useful.');
         $link_text = apply_filters('leadstream_dashboard_promo_link_text', 'Contact support');
 
-        echo '<section class="ls-promo-card" aria-label="LeadStream support card">';
+        echo '<section class="ls-promo-card" aria-label="LeadStream Pro product card">';
         echo '<div class="ls-promo-card__summary">';
         echo '<img class="ls-promo-card__logo" src="' . esc_url($logo) . '" alt="LeadStream logo" width="40" height="40" />';
         echo '<div>';
