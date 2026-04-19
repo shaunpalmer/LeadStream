@@ -223,7 +223,7 @@ class Render {
         $href = apply_filters('leadstream_dashboard_promo_href', 'https://projectstudios.co.nz/product-leadstream/');
         $title = apply_filters('leadstream_dashboard_promo_title', 'LeadStream Pro');
         $headline = apply_filters('leadstream_dashboard_promo_headline', 'See what LeadStream Pro can unlock for your pipeline.');
-        $summary = apply_filters('leadstream_dashboard_promo_summary', 'Explore the provision and features included in LeadStream Pro.');
+        $summary = apply_filters('leadstream_dashboard_promo_summary', 'Explore the features and capabilities included in LeadStream Pro.');
         $detail = apply_filters('leadstream_dashboard_promo_detail', 'Review what is included, how it works, and whether it fits your tracking and reporting workflow.');
         $link_text = apply_filters('leadstream_dashboard_promo_link_text', 'View LeadStream Pro');
 
