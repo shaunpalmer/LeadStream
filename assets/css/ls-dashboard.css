@@ -85,6 +85,50 @@
 /* Ensure sections are visible */
 .phone-section, .link-section { display:block !important; visibility:visible !important; }
 
+/* Dashboard promo/support card */
+.ls-promo-card {
+  margin-top: 16px;
+  border: 1px solid #dbe9f7;
+  border-left: 4px solid #2271b1;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  padding: 14px;
+}
+.ls-promo-card__summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ls-promo-card__logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid #dbe9f7;
+  flex: 0 0 auto;
+}
+.ls-promo-card__title {
+  margin: 0;
+  font-size: 16px;
+  color: #1d2327;
+}
+.ls-promo-card__headline {
+  margin: 4px 0 0 0;
+  color: #385a7a;
+}
+.ls-promo-card__details {
+  margin-top: 10px;
+}
+.ls-promo-card__details summary {
+  cursor: pointer;
+  color: #2271b1;
+  font-weight: 600;
+}
+.ls-promo-card__details p {
+  margin: 10px 0 12px 0;
+}
+
 /* Better grid for KPI tiles */
 .ls-kpis { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 
