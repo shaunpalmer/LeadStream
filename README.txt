@@ -14,7 +14,9 @@
 
 ## Description
 
-**See exactly which forms, buttons, and calls-to-action drive real leads—on every major analytics platform.**
+**See Which Placement Actually Converts**
+
+Track leads by exact source: site button, printed QR code, Facebook link, YouTube QR, and more.
 
 LeadStream is the all-in-one event tracking and pixel injector that finally puts you in control of your marketing data. No more guessing which forms convert, which page sections win, or which pixels are firing—LeadStream lets you track, label, and optimize every conversion, everywhere.
 
