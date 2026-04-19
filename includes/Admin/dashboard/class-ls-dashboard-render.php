@@ -229,7 +229,7 @@ class Render {
 
         echo '<section class="ls-promo-card" aria-label="LeadStream support card">';
         echo '<div class="ls-promo-card__summary">';
-        echo '<img class="ls-promo-card__logo" src="' . esc_url($logo) . '" alt="LeadStream logo" loading="lazy" width="40" height="40" />';
+        echo '<img class="ls-promo-card__logo" src="' . esc_url($logo) . '" alt="LeadStream logo" width="40" height="40" />';
         echo '<div>';
         echo '<h3 class="ls-promo-card__title">' . esc_html($title) . '</h3>';
         echo '<p class="ls-promo-card__headline">' . esc_html($headline) . '</p>';
@@ -238,7 +238,7 @@ class Render {
         echo '<details class="ls-promo-card__details">';
         echo '<summary>' . esc_html($summary) . '</summary>';
         echo '<p>' . esc_html($detail) . '</p>';
-        echo '<a class="button button-secondary" href="' . esc_url($href) . '" target="_blank" rel="dofollow noopener">' . esc_html($link_text) . '</a>';
+        echo '<a class="button button-secondary" href="' . esc_url($href) . '" target="_blank" rel="noopener noreferrer">' . esc_html($link_text) . '</a>';
         echo '</details>';
         echo '</section>';
     }
