@@ -7,6 +7,24 @@
  * - Exposes helpers for reading IDs and updating meta safely
  *
  * Security: No PII stored in cookies. HttpOnly only for server-read cookies.
+ *
+ * TODO [COOKIE-002] DUPLICATE CLASS — this file and includes/class-LS-Cookies.php
+ * both declare the global class 'LS_Cookies'. Only ONE can be loaded per request.
+ * If the autoloader (or any require_once) loads the root copy first, this file is
+ * irrelevant; if both are somehow loaded, PHP will throw a fatal class-redeclaration
+ * error. The two files must be consolidated into a single authoritative source.
+ * The root copy (includes/class-LS-Cookies.php) is truncated and broken; this copy
+ * is syntactically valid but is missing the uuidv4() method — see TODO [COOKIE-003].
+ *
+ * TODO [COOKIE-003] MISSING METHOD — bootstrap() calls self::uuidv4() but this file
+ * does not define uuidv4(). A working implementation exists in
+ * includes/Tracking/CookieManager::uuidv4() and can be copied here, or this entire
+ * class can be replaced by CookieManager which is more complete.
+ *
+ * TODO [COOKIE-004] INDENTATION / BRACE ALIGNMENT in set_cookie() below is
+ * misaligned (extra indent levels). The method body is technically valid PHP but
+ * the visual structure is misleading — it looks like nested blocks but they are not.
+ * Clean up the indentation when the above TODOs are resolved.
  */
 class LS_Cookies {
     const COOKIE_ID   = 'lsid';
@@ -19,6 +37,8 @@ class LS_Cookies {
     public static function bootstrap() : void {
         // Create ID if missing
         if ( empty($_COOKIE[self::COOKIE_ID]) ) {
+            // TODO [COOKIE-003]: self::uuidv4() is called here but uuidv4() is not
+            // defined in this class. This will throw an Error at runtime.
             $uuid = self::uuidv4();
             self::set_cookie(self::COOKIE_ID, $uuid, true /*httpOnly*/);
             // New meta
@@ -52,6 +72,8 @@ class LS_Cookies {
         return [];
     }
 
+    // TODO [COOKIE-004]: Indentation is misaligned inside this method — looks like
+    // nested scopes but the braces at lines 65-66 simply close the method and class.
     private static function set_cookie(string $name, string $value, bool $httpOnly = false) : void {
         // Requires PHP 7.3+ for options array
         $secure = is_ssl();

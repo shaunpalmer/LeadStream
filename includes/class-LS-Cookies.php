@@ -7,6 +7,29 @@
  * - Exposes helpers for reading IDs and updating meta safely
  *
  * Security: No PII stored in cookies. HttpOnly only for server-read cookies.
+ *
+ * TODO [COOKIE-001] CRITICAL — THIS FILE IS TRUNCATED / INCOMPLETE.
+ * It ends mid-statement at line 59 with an unclosed array literal:
+ *     setcookie($name, $value, [
+ *         'expires'  =>
+ * PHP will throw a Parse error (Unclosed '[') when this file is loaded, which
+ * will cause a fatal error and take the entire plugin down.
+ *
+ * Additionally, the uuidv4() method is missing entirely. bootstrap() calls
+ * self::uuidv4() on line 22, which would throw an Error: Call to undefined method.
+ *
+ * A complete copy of this class (with set_cookie() and uuidv4() intact) exists at
+ * includes/Tracking/class-LS-Cookies.php, but that copy also has its own issues —
+ * see TODO [COOKIE-002] in that file.
+ *
+ * Resolution options:
+ *   A) Complete this file (add uuidv4() method and close set_cookie() properly).
+ *   B) Delete this file and rely on includes/Tracking/class-LS-Cookies.php after
+ *      fixing it.
+ *   C) Replace both with includes/Tracking/CookieManager.php which is fully
+ *      functional and already contains uuidv4().
+ * Either way, having TWO files defining the same global class 'LS_Cookies' must be
+ * resolved — only one can be loaded or PHP will fatal with a class redeclaration error.
  */
 class LS_Cookies {
     const COOKIE_ID   = 'lsid';
@@ -19,6 +42,8 @@ class LS_Cookies {
     public static function bootstrap() : void {
         // Create ID if missing
         if ( empty($_COOKIE[self::COOKIE_ID]) ) {
+            // TODO [COOKIE-001]: self::uuidv4() is called here but the method is
+            // missing from this file — fatal Error if this code ever runs.
             $uuid = self::uuidv4();
             self::set_cookie(self::COOKIE_ID, $uuid, true /*httpOnly*/);
             // New meta
@@ -52,6 +77,9 @@ class LS_Cookies {
         return [];
     }
 
+    // TODO [COOKIE-001]: set_cookie() is incomplete — the array literal and method
+    // body were cut off. The remainder of this method and the uuidv4() method are
+    // missing. Do not load this file until both methods are restored.
     private static function set_cookie(string $name, string $value, bool $httpOnly = false) : void {
         // Requires PHP 7.3+ for options array
         $secure = is_ssl();
