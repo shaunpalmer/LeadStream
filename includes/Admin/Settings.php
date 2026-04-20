@@ -3932,6 +3932,7 @@ endif;
 					$ld_where[]  = 'l.redirect_type = %s';
 					$ld_params[] = $ld_rt; }
 				if ( $ld_q ) {
+					global $wpdb;
 					$like        = '%' . $wpdb->esc_like( $ld_q ) . '%';
 					$ld_where[]  = '(l.slug LIKE %s OR l.target_url LIKE %s)';
 					$ld_params[] = $like;
@@ -4100,6 +4101,7 @@ endif;
 					$where[]  = 'l.slug = %s';
 					$params[] = $slug; }
 				if ( $page_q ) {
+					global $wpdb;
 					$like     = '%' . $wpdb->esc_like( $page_q ) . '%';
 					$where[]  = '(c.page_title LIKE %s OR c.page_url LIKE %s)';
 					$params[] = $like;
