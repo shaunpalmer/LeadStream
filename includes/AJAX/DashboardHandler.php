@@ -5,6 +5,19 @@ defined('ABSPATH') || exit;
 
 /**
  * Dashboard data AJAX handler
+ *
+ * TODO [BOOT-003]: This class is NEVER loaded or initialized.
+ * It is not listed in Bootstrap::$admin_components and there is no
+ * explicit require_once for it anywhere in the codebase. As a result,
+ * init() is never called, the wp_ajax_leadstream_dashboard_data action is
+ * never registered, and any JavaScript that calls this AJAX endpoint will
+ * receive WordPress's default "0" (no handler) response.
+ *
+ * Fix: add 'AJAX/DashboardHandler' to Bootstrap::$admin_components and add
+ * a corresponding class_exists + ::init() call in initialize_components().
+ *
+ * Note: handle_dashboard_data() calls $ds->series_events(7) — verify that
+ * Dashboard\Data::series_events() exists before wiring this up.
  */
 class DashboardHandler {
     public static function init() {

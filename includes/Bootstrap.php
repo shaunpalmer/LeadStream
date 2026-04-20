@@ -12,12 +12,20 @@ class Bootstrap
 {
     /**
      * Core components that must be loaded early
+     *
+     * TODO [BOOT-001]: 'Events/class-ls-events' and 'Events/class-ls-form-events' use
+     * legacy hyphenated filenames. load_component() builds the class-existence check as
+     * 'LS\Events\class-ls-events' — a PHP-invalid class name that will ALWAYS evaluate
+     * false, so the guard never fires. The files ARE loaded via the file_exists fallback,
+     * but the duplicate-load protection is broken for these two entries. Consider renaming
+     * the files to 'LS_Events.php' / 'LS_Form_Events.php' (PSR-4) or using the plain
+     * class name as the key (e.g. 'Events/LS_Events').
      */
     private static array $core_components = [
         'Utils',
         'Admin/Assets',
-    'Events/class-ls-events',
-    'Events/class-ls-form-events',
+    'Events/class-ls-events',       // TODO [BOOT-001] hyphenated name breaks class_exists guard — see above
+    'Events/class-ls-form-events',  // TODO [BOOT-001] same issue
         'Setup/Installer',
         'Frontend/Injector',
         'Frontend/RedirectHandler',
@@ -25,18 +33,31 @@ class Bootstrap
 
     /**
      * Admin-only components
+     *
+     * TODO [BOOT-002]: 'Admin/Health', 'Repository/LinksRepository', and 'Export/Exporters'
+     * are loaded here but NEVER initialized in initialize_components(). They have no
+     * standalone init() / boot() methods, and no class_exists() call for them exists in
+     * initialize_components(). They are only useful if other code calls their static methods
+     * directly after the class has been loaded — which works, but it means the load here is
+     * implicit and easy to miss. At minimum, document the intent or add explicit init stubs.
+     *
+     * TODO [BOOT-003]: 'AJAX/DashboardHandler' (includes/AJAX/DashboardHandler.php) is NOT
+     * listed here and is therefore never loaded or initialized. The class registers an AJAX
+     * action (wp_ajax_leadstream_dashboard_data) in its init() method. Currently that AJAX
+     * endpoint is dead/unreachable.
      */
     private static array $admin_components = [
-        'Admin/Health',
+        'Admin/Health',               // TODO [BOOT-002] loaded but never init()-ed
         'Admin/Settings',
     'Admin/DashboardAdmin',
         'Admin/LinksDashboard',
-        'Repository/LinksRepository',
+        'Repository/LinksRepository', // TODO [BOOT-002] loaded but never init()-ed
         'Repository/ClicksRepositoryInterface',
         'Repository/ClicksRepository',
-        'Export/Exporters',
+        'Export/Exporters',           // TODO [BOOT-002] loaded but never init()-ed
         'AJAX/UTMHandler',
         'AJAX/PhoneHandler',
+        'AJAX/DashboardHandler',
         'REST/CallsWebhook',
     ];
 
@@ -59,6 +80,14 @@ class Bootstrap
 
     /**
      * Legacy components (keep for backward compatibility)
+     *
+     * TODO [BOOT-004]: load_legacy_components() is NEVER CALLED from init().
+     * LS_Callbar.php is therefore never require_once'd via this path.
+     * initialize_components() checks class_exists('LS\\LS_Callbar') before calling
+     * init() — but since the file was never loaded, the class does not exist, and the
+     * call bar is silently skipped on every page load. The call bar will NOT render.
+     * Fix: add  self::load_legacy_components();  inside init() before
+     * initialize_components() is called, or move 'LS_Callbar' into $core_components.
      */
     private static array $legacy_components = [
         'LS_Callbar',
@@ -86,6 +115,8 @@ class Bootstrap
             self::load_frontend_components();
         }
 
+        self::load_legacy_components();
+
         // Initialize all loaded components
         self::initialize_components();
 
@@ -100,6 +131,7 @@ class Bootstrap
     {
         require_once plugin_dir_path(LS_FILE) . 'includes/autoload.php';
     }
+
 
     /**
      * Load core components required for both admin and frontend
@@ -158,6 +190,16 @@ class Bootstrap
 
     /**
      * Load a single component by class path
+     *
+     * TODO [BOOT-005]: The duplicate-load guard uses the class name derived from
+     * $component_path (e.g. 'LS\Events\class-ls-events'), which may NOT match the
+     * actual class declared inside the file (e.g. 'LS\Events\LS_Events').
+     * For hyphenated paths such as 'Events/class-ls-events', the derived name is a
+     * PHP-invalid class name, so class_exists() always returns false and the file
+     * is required unconditionally on every call. This is harmless at present (all
+     * callers use require_once so the file is only parsed once), but the guard
+     * should be fixed to use the real class name, or the component keys in
+     * $core_components should be updated to match the actual class names.
      */
     private static function load_component(string $component_path): void
     {
@@ -211,6 +253,12 @@ class Bootstrap
                 \LS\Admin\Settings::init();
             }
 
+            // TODO [BOOT-002]: LS\Admin\Health is loaded in $admin_components but
+            // has no init() / boot() method and is never explicitly initialized here.
+            // It works only because Settings.php calls Health::render_phone_panel()
+            // directly. This is fine but worth noting — if Health ever gains hooks
+            // it will need an init() call added here.
+
             if (class_exists('LS\\Admin\\LinksDashboard')) {
                 \LS\Admin\LinksDashboard::init();
             }
@@ -225,6 +273,10 @@ class Bootstrap
 
             if (class_exists('LS\\REST\\CallsWebhook')) {
                 \LS\REST\CallsWebhook::init();
+            }
+
+            if (class_exists('LS\\AJAX\\DashboardHandler')) {
+                \LS\AJAX\DashboardHandler::init();
             }
 
             // Initialize licensing if available
