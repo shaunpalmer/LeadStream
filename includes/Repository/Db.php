@@ -17,6 +17,11 @@ final class Db {
 	 */
 	public static function table( string $base_name ): string {
 		global $wpdb;
+		// Restrict to valid table name characters (alphanumeric and underscores only).
+		if ( ! preg_match( '/^[a-zA-Z0-9_]+$/', $base_name ) ) {
+			_doing_it_wrong( __METHOD__, 'Invalid table base name.', '1.0' );
+			return '';
+		}
 		return $wpdb->prefix . $base_name;
 	}
 }
