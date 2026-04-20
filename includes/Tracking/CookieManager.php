@@ -231,34 +231,3 @@ final class CookieManager
     }
 
 }
-
-// -----------------
-#add_action('template_redirect', function () {
-#    $c = CookieManager::snapshot();
-    // $c['vid'] is the canonical server ID; $c['session_id'] for visit; $c['first_seen']/['last_seen'] are ISO
-    // Example: stitch a pageview
-    /*
-    global $wpdb;
-    $wpdb->insert($wpdb->prefix.'ls_analytics', [
-        'vid'        => $c['vid'],
-        'session_id' => $c['session_id'],
-        'path'       => esc_url_raw($_SERVER['REQUEST_URI'] ?? '/'),
-        'ref'        => esc_url_raw($_SERVER['HTTP_REFERER'] ?? ''),
-        'ip_hash'    => CookieManager::hashed_ip(),
-        'ua'         => substr($_SERVER['HTTP_USER_AGENT'] ?? '', 255),
-        'ts'         => current_time('mysql', true),
-    ], ['%s','%s','%s','%s','%s','%s','%s']);
-    */
-#});
-
-
-// TODO
-#add_action('wp_enqueue_scripts', function () {
-#    wp_enqueue_script(
-#        'ls-cookies',
-#       plugins_url('assets/js/ls-cookies.js', __FILE__),
-#        [],
-#        '1.0.0',
-#        true
-#    );
-#});

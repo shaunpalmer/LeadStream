@@ -21,6 +21,9 @@ class Assets {
     // Frontend event listener for JS-injected events (dataLayer/gtag)
     add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_event_listener']);
         
+        // Frontend cookie context helper (exposes window.LEADSTREAM_COOKIES)
+        add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_ls_cookies']);
+
         // Frontend phone tracking
         add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_phone_tracking']);
     }
@@ -879,6 +882,29 @@ JS;
                 'ajax_url' => admin_url('admin-ajax.php'),
                 'event_nonce' => wp_create_nonce('leadstream_event'),
             ]);
+        }
+
+        /**
+         * Enqueue the cookie-context helper script on public pages.
+         *
+         * Populates window.LEADSTREAM_COOKIES with visitor/session values
+         * from ls_* cookies so front-end widgets and the dataLayer can
+         * access them without re-parsing cookies themselves.
+         */
+        public static function enqueue_ls_cookies(): void {
+            if (is_admin()) { return; }
+            if (defined('LS_FILE')) {
+                $ls_base = LS_FILE;
+            } else {
+                $ls_base = dirname(dirname(__DIR__)) . '/leadstream-analytics-injector.php';
+            }
+            wp_enqueue_script(
+                'ls-cookies',
+                plugins_url('assets/js/ls-cookies.js', $ls_base),
+                [],
+                '1.0.0',
+                true
+            );
         }
 
         /**
