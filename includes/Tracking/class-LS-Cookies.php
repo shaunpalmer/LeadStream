@@ -55,12 +55,19 @@ class LS_Cookies {
     private static function set_cookie(string $name, string $value, bool $httpOnly = false) : void {
         // Requires PHP 7.3+ for options array
         $secure = is_ssl();
-                setcookie($name, $value, [
-                    'expires'  => time() + self::COOKIE_TTL,
-                    'path'     => '/',
-                    'secure'   => $secure,
-                    'httponly' => $httpOnly,
-                    'samesite' => 'Lax'
-                ]);
-            }
-        }
+        setcookie($name, $value, [
+            'expires'  => time() + self::COOKIE_TTL,
+            'path'     => '/',
+            'secure'   => $secure,
+            'httponly' => $httpOnly,
+            'samesite' => 'Lax'
+        ]);
+    }
+
+    private static function uuidv4() : string {
+        $data = random_bytes(16);
+        $data[6] = chr((ord($data[6]) & 0x0f) | 0x40);
+        $data[8] = chr((ord($data[8]) & 0x3f) | 0x80);
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+    }
+}
