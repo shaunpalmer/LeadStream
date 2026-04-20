@@ -32,6 +32,8 @@ class Bootstrap
     'Admin/DashboardAdmin',
         'Admin/LinksDashboard',
         'Repository/LinksRepository',
+        'Repository/ClicksRepositoryInterface',
+        'Repository/ClicksRepository',
         'Export/Exporters',
         'AJAX/UTMHandler',
         'AJAX/PhoneHandler',
