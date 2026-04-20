@@ -55,8 +55,8 @@ class Bootstrap
         'Export/Exporters',           // TODO [BOOT-002] loaded but never init()-ed
         'AJAX/UTMHandler',
         'AJAX/PhoneHandler',
+        'AJAX/DashboardHandler',
         'REST/CallsWebhook',
-        // TODO [BOOT-003] 'AJAX/DashboardHandler' is missing — AJAX endpoint unreachable
     ];
 
     /**
@@ -88,7 +88,7 @@ class Bootstrap
      * initialize_components() is called, or move 'LS_Callbar' into $core_components.
      */
     private static array $legacy_components = [
-        'LS_Callbar', // TODO [BOOT-004] never loaded — see above
+        'LS_Callbar',
     ];
 
     /**
@@ -113,9 +113,7 @@ class Bootstrap
             self::load_frontend_components();
         }
 
-        // TODO [BOOT-004]: self::load_legacy_components() must be called here so that
-        // LS_Callbar is loaded before initialize_components() checks for it below.
-        // Without this call, the call bar is never registered.
+        self::load_legacy_components();
 
         // Initialize all loaded components
         self::initialize_components();
@@ -275,9 +273,9 @@ class Bootstrap
                 \LS\REST\CallsWebhook::init();
             }
 
-            // TODO [BOOT-003]: \LS\AJAX\DashboardHandler::init() is missing here.
-            // DashboardHandler registers wp_ajax_leadstream_dashboard_data. Without
-            // init(), the AJAX endpoint is never registered and will return a 400/0.
+            if (class_exists('LS\\AJAX\\DashboardHandler')) {
+                \LS\AJAX\DashboardHandler::init();
+            }
 
             // Initialize licensing if available
             if (class_exists('LS\\License\\AdminTab')) {
@@ -294,10 +292,6 @@ class Bootstrap
             }
         }
 
-        // TODO [BOOT-004]: LS_Callbar will NEVER be initialized here because
-        // load_legacy_components() is never called from init(), so LS_Callbar.php
-        // is never loaded. class_exists('LS\\LS_Callbar') will always be false.
-        // Fix: call self::load_legacy_components() in init() before this method.
         // Initialize legacy components
         if (class_exists('LS\\LS_Callbar')) {
             \LS\LS_Callbar::init();
