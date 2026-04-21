@@ -55,6 +55,7 @@ class Bootstrap
         'Repository/LinksRepository', // TODO [BOOT-002] loaded but never init()-ed
         'Repository/ClicksRepositoryInterface',
         'Repository/ClicksRepository',
+        'Repository/CallsRepository',
         'Export/Exporters',           // TODO [BOOT-002] loaded but never init()-ed
         'AJAX/UTMHandler',
         'AJAX/PhoneHandler',
