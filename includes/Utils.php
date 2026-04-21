@@ -8,6 +8,8 @@ namespace LS;
 
 defined('ABSPATH') || exit;
 #surgical move 👍 You didn’t overthink it, you just stabilised the system, which is the right call in this moment.
+#TODO:This is temporary we until we find the fix This is temporary
+#Thing that down doesn't show on the first tab of the dashboard 
 if (!class_exists(__NAMESPACE__ . '\\Utils')) {
 class Utils {
     
