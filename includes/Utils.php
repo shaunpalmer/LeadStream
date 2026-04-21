@@ -7,7 +7,7 @@
 namespace LS;
 
 defined('ABSPATH') || exit;
-#TODO:In some versions of the codeThese functions are getting called twice 
+#TODO:In some versions of the Class/code These functions are getting called twice 
 class Utils 
     
     /**
