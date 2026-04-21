@@ -7,8 +7,8 @@
 namespace LS;
 
 defined('ABSPATH') || exit;
-
-class Utils {
+if (!class_exists(__NAMESPACE__ . '\\Utils')) {
+class Utils 
     
     /**
      * Custom sanitization for JavaScript - preserves code integrity while ensuring security
@@ -132,4 +132,5 @@ class Utils {
         }
         return $n;
     }
+}
 }
