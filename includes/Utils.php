@@ -7,7 +7,7 @@
 namespace LS;
 
 defined('ABSPATH') || exit;
-if (!class_exists(__NAMESPACE__ . '\\Utils')) {
+#TODO:In some versions of the codeThese functions are getting called twice 
 class Utils 
     
     /**
@@ -133,4 +133,4 @@ class Utils
         return $n;
     }
 }
-}
+
