@@ -63,10 +63,20 @@ class Bootstrap
     ];
 
     /**
+     * Tracks whether the plugin has already been initialized to prevent double-calling.
+     */
+    private static bool $initialized = false;
+
+    /**
      * Initialize the plugin
      */
     public static function init(): void
     {
+        if (self::$initialized) {
+            return;
+        }
+        self::$initialized = true;
+
         // Load autoloader first
         self::load_autoloader();
 

@@ -8,7 +8,7 @@ namespace LS;
 
 defined('ABSPATH') || exit;
 #TODO:In some versions of the Class/code These functions are getting called twice 
-class Utils 
+class Utils {
     
     /**
      * Custom sanitization for JavaScript - preserves code integrity while ensuring security
