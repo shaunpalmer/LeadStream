@@ -1,0 +1,41 @@
+2025-09-01 — Developer notes (local only)
+
+- Scope
+	- Short technical notes for local testing between dev and AI; no external audience.
+
+- Key changes
+	- Server: seat-gate implemented in `public/index.php` — new domains allowed until `max_sites`, then 403 {"error":"seats-exceeded"}.
+	- Client: `Manager::clear_local_cache()` added to reset local license options.
+	- Admin: small Test Tools area added to `AdminTab` with a local-only "Generate & Copy test key" button (browser-only, inserts into `#ls_license_key`).
+	- Scripts: `create_smoke_key.php`, `http_test.php` (uses .com), `http_test_with_counts_com.php`, and `run_reactivation_deactivate_test.php` added/updated.
+
+- Tests performed (local)
+	- Seat enforcement: observed 200, 200, then 403 on the third new domain (expected).
+	- Reactivation: same-domain activates should not consume a seat (server checks existing activations).
+	- Deactivate/status: deactivation clears activation; status should show not-activated or deactivated.
+
+- Known local issues
+	- `create_smoke_key.php` may fail with PDO access errors if DB user lacks privileges — grant DB rights or set env vars.
+	- HTTP 0 responses mean the local license server is not reachable. Ensure the PHP dev server or XAMPP Apache is running and that antivirus (Avast) is not blocking local HTTP requests.
+
+- Quick local run (commands)
+	1) Start server (from project root):
+		 php -S 127.0.0.1:8080 -t public
+		 or use XAMPP host: http://localhost/wordpress/
+	2) Set CLI DB env (PowerShell):
+		 $env:LS_DB_DSN='mysql:host=127.0.0.1;dbname=leadstream_lic;charset=utf8mb4'
+		 $env:LS_DB_USER='leadstream_user'
+		 $env:LS_DB_PASS='secure-pass'
+	3) Create smoke key (if needed):
+		 php .\scripts\create_smoke_key.php SMOKE-TEST-0005
+	4) Reactivate/deactivate/status sequence:
+		 php .\scripts\run_reactivation_deactivate_test.php SMOKE-TEST-0005
+	5) Seat enforcement test:
+		 php .\scripts\http_test_with_counts_com.php SMOKE-TEST-0005
+
+- Dev follow-ups
+	- Keep dev-domain bypass active for testing; remove/restrict before release.
+	- Remove any DOCK-marked test-only code before shipping.
+
+End of developer notes.
+

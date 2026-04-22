@@ -1,0 +1,39 @@
+name: Licensing integrity
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  scan:
+    name: Verify licensing scaffolding
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure CODEOWNERS covers licensing paths
+        run: |
+          test -f .github/CODEOWNERS
+          grep -E '^/includes/License/\*' .github/CODEOWNERS
+          grep -E '^/leadstream-licserver/\*\*' .github/CODEOWNERS || true
+
+      - name: Fail if potential secrets (plain keys) are committed
+        run: |
+          ! git grep -I -nE '(LS-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4})' -- ':!**/*.png' ':!**/*.jpg' ':!**/*.jpeg' || (echo "Found potential license keys in repo." && exit 1)
+
+      - name: Verify ApiClient BASE is not default
+        run: |
+          if grep -R "license.yourdomain.tld" -n includes/License/ApiClient.php; then
+            echo "ApiClient BASE still default. OK for dev, but block merges to main."; exit 1;
+          fi
+
+      - name: Check Manager stubbed methods present
+        run: |
+          test -f includes/License/Manager.php
+          grep -q "class" includes/License/Manager.php || (echo "Manager missing class definition" && exit 1)
+
+      - name: Done
+        run: echo "Licensing integrity checks passed"

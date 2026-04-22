@@ -1,0 +1,621 @@
+/* LeadStream Admin Styles - Professional WordPress Admin Layout */
+
+/* Namespace so it only hits LeadStream pages */
+.leadstream-admin {
+  /* Bump up left-column width so labels live above fields nicely */
+  th {
+    width: 150px;
+    vertical-align: top;
+    text-align: left;
+    padding-bottom: .5em;
+  }
+
+  /* Move label display into its own block */
+  th label {
+    display: block;
+    margin-bottom: .25em;
+    font-weight: 600;
+    color: #23282d;
+    font-size: 14px; /* Match WordPress admin font size */
+  }
+
+  /* Full-width, monospace textarea */
+  td .code {
+    width: 100% !important;
+    max-width: 800px;
+    font-family: Menlo, Monaco, Consolas, monospace !important;
+    line-height: 1.4;
+    margin-bottom: .5em;
+    border: 1px solid #ddd;
+  }
+
+  /* Description styling - match WordPress admin */
+  td .description,
+  p.description {
+    margin-top: .5em;
+    color: #646970;
+    font-style: normal;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* Input fields - match WordPress admin styling */
+  input[type="text"],
+  input[type="url"],
+  input[type="email"] {
+    font-size: 14px;
+    line-height: 1.4;
+    padding: 6px 8px;
+    border: 1px solid #8c8f94;
+    border-radius: 3px;
+    background-color: #fff;
+    color: #2c3338;
+  }
+
+  input[type="text"]:focus,
+  input[type="url"]:focus,
+  input[type="email"]:focus {
+    border-color: #2271b1;
+    box-shadow: 0 0 0 1px #2271b1;
+    outline: 2px solid transparent;
+  }
+
+  /* Spacing between sections */
+  table + h2,
+  h2 + table {
+    margin-top: 2em;
+  }
+
+  /* Form table improvements */
+  .form-table th {
+    font-size: 14px;
+    line-height: 1.3;
+    font-weight: 600;
+    padding: 20px 10px 20px 0;
+  }
+
+  .form-table td {
+    padding: 15px 10px 20px 0;
+    line-height: 1.3;
+    vertical-align: top;
+  }
+}
+
+/* Pretty Links specific styles */
+.leadstream-admin .postbox {
+  background: #fff;
+  border: 1px solid #c3c4c7;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.leadstream-admin .postbox-header {
+  border-bottom: 1px solid #c3c4c7;
+  background: #fff;
+}
+
+.leadstream-admin .postbox-header h2 {
+  font-size: 14px;
+  line-height: 1.4;
+  margin: 0;
+  padding: 8px 12px;
+  font-weight: 600;
+  color: #1d2327;
+  border-bottom: none;
+}
+
+.leadstream-admin .inside {
+  padding: 12px;
+}
+
+/* Live preview styling */
+#slug-preview {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+#slug-feedback {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Button improvements */
+.leadstream-admin .submit {
+  margin-top: 1.5em;
+  padding-top: 1em;
+  border-top: 1px solid #c3c4c7;
+}
+
+.leadstream-admin .button {
+  font-size: 13px;
+  line-height: 2.15384615;
+  min-height: 30px;
+  margin: 0;
+  padding: 0 10px;
+  cursor: pointer;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 3px;
+  white-space: nowrap;
+  box-sizing: border-box;
+  text-decoration: none;
+  vertical-align: top;
+}
+
+/* CodeMirror enhancements for LeadStream */
+.leadstream-admin .CodeMirror {
+  border: 1px solid #8c8f94 !important;
+  font-family: Menlo, Monaco, Consolas, "Courier New", monospace !important;
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+  max-width: 800px !important;
+  width: 100% !important;
+  margin-bottom: .5em;
+}
+
+.leadstream-admin .CodeMirror-scroll {
+  min-height: 400px !important;
+}
+
+.leadstream-admin .CodeMirror-linenumber {
+  color: #999 !important;
+  padding: 0 8px 0 5px !important;
+}
+
+/* Section headers */
+.leadstream-admin h2 {
+  border-bottom: 1px solid #c3c4c7;
+  padding-bottom: 8px;
+  margin-bottom: 1em;
+  font-size: 1.3em;
+  font-weight: 600;
+  color: #1d2327;
+  line-height: 1.4;
+}
+
+/* WordPress admin notice improvements */
+.leadstream-admin .notice {
+  margin: 5px 0 15px;
+  padding: 1px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  border-left-width: 4px;
+  border-left-style: solid;
+  background: #fff;
+  box-shadow: 0 1px 1px 0 rgba(0, 0, 0, 0.1);
+}
+
+/* Pretty Links helper section improvements */
+.leadstream-pretty-links-helper {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.leadstream-pretty-links-helper h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1d2327;
+  line-height: 1.4;
+}
+
+.pretty-link-item {
+  font-family: Consolas, Monaco, "Courier New", monospace;
+  font-size: 12px;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.pretty-link-item:hover {
+  background-color: #f6f7f7 !important;
+  border-color: #c3c4c7 !important;
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 782px) {
+  .leadstream-admin .form-table th,
+  .leadstream-admin .form-table td {
+    display: block;
+    width: auto;
+  }
+  
+  .leadstream-admin .form-table th {
+    padding: 20px 0 5px;
+  }
+  
+  .leadstream-admin .form-table td {
+    padding: 5px 0 20px;
+  }
+}
+
+/* ==============================================
+   SPARKLINE STYLES
+   ============================================== */
+
+/* List Table Sparklines */
+.wp-list-table .column-trend {
+    width: 140px;
+}
+
+.ls-sparkline-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ls-sparkline-container svg {
+    border: 1px solid #dcdcde;
+    background: linear-gradient(135deg, #f9f9f9 0%, #f0f0f1 100%);
+    border-radius: 3px;
+    transition: box-shadow 0.2s ease;
+}
+
+.ls-sparkline-container svg:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border-color: #0073aa;
+}
+
+.ls-sparkline-trend {
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+/* Dashboard Widget Sparklines */
+.leadstream-dashboard-widget .ls-widget-sparkline {
+    background: linear-gradient(to bottom, #fafafa, #f0f0f1);
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.leadstream-dashboard-widget .ls-widget-sparkline h4 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: #1d2327;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.leadstream-dashboard-widget .ls-widget-sparkline svg {
+    border: 1px solid #c3c4c7;
+    background: linear-gradient(to bottom, #ffffff, #f6f7f7);
+    border-radius: 4px;
+    display: block;
+    margin: 0 auto 10px auto;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.ls-sparkline-stats {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: #646970;
+    margin-top: 8px;
+}
+
+.ls-trend-indicator {
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ls-trend-indicator.trend-up {
+    color: #00a32a;
+}
+
+.ls-trend-indicator.trend-down {
+    color: #d63638;
+}
+
+.ls-trend-indicator.trend-flat {
+    color: #646970;
+}
+
+/* Responsive sparklines for smaller screens */
+@media (max-width: 782px) {
+    .wp-list-table .column-trend {
+        display: none;
+    }
+    
+    .leadstream-dashboard-widget .ls-widget-sparkline svg {
+        width: 100%;
+        height: auto;
+        max-width: 240px;
+    }
+}
+
+/* ==============================================
+   PHONE TRACKING STYLES
+   ============================================== */
+
+/* Lightweight accordion */
+.ls-acc-toggle { margin: 4px 4px 4px 0; }
+.ls-acc-panel { margin: 8px 0 14px 0; }
+
+/* Phone tab: add breathing room for button rows */
+.leadstream-phone-tracking .ls-btn-row .button { margin: 0 4px 4px 0; }
+.leadstream-phone-tracking .ls-acc-toggle.button { margin: 0 4px 4px 0; }
+
+/* Pagination styling for phone and call outcomes tables (reuse links table look) */
+.ls-phone-calls .tablenav .tablenav-pages,
+.ls-call-outcomes .tablenav .tablenav-pages {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links a,
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links span.current,
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links a,
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links span.current {
+  display: inline-block;
+  margin: 0 3px;
+  padding: 2px 8px;
+  border: 1px solid #dcdcde;
+  border-radius: 3px;
+  text-decoration: none;
+  color: #1d2327;
+  background: #fff;
+}
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links span.current,
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links span.current {
+  background: #f0f0f1;
+  font-weight: 600;
+}
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links a:hover,
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links a:hover {
+  background: #f6f7f7;
+}
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links a.first-page::before { content: "⏮"; margin-right: 4px; color: #1d2327; }
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links a.prev-page::before  { content: "◀"; margin-right: 4px; color: #1d2327; }
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links a.next-page::after  { content: "▶"; margin-left: 4px; color: #1d2327; }
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links a.last-page::after  { content: "⏭"; margin-left: 4px; color: #1d2327; }
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links a.first-page::before { content: "⏮"; margin-right: 4px; color: #1d2327; }
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links a.prev-page::before  { content: "◀"; margin-right: 4px; color: #1d2327; }
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links a.next-page::after  { content: "▶"; margin-left: 4px; color: #1d2327; }
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links a.last-page::after  { content: "⏭"; margin-left: 4px; color: #1d2327; }
+
+/* Ensure empty nav spans match WP look */
+.tablenav-pages .tablenav-pages-navspan.button.disabled {
+  background: #f6f7f7;
+  border: 1px solid #dcdcde;
+  color: #a7aaad;
+}
+
+/* Restore/force dashicon-based arrows if a reset nuked pseudo-elements. Also works for disabled spans. */
+.tablenav .tablenav-pages a.first-page:before,
+.tablenav .tablenav-pages .tablenav-pages-navspan.first-page:before {
+  content: "\f341\f341";
+  font: normal 20px/1 dashicons;
+}
+.tablenav .tablenav-pages a.prev-page:before,
+.tablenav .tablenav-pages .tablenav-pages-navspan.prev-page:before {
+  content: "\f341";
+  font: normal 20px/1 dashicons;
+}
+.tablenav .tablenav-pages a.next-page:before,
+.tablenav .tablenav-pages .tablenav-pages-navspan.next-page:before {
+  content: "\f345";
+  font: normal 20px/1 dashicons;
+}
+.tablenav .tablenav-pages a.last-page:before,
+.tablenav .tablenav-pages .tablenav-pages-navspan.last-page:before {
+  content: "\f345\f345";
+  font: normal 20px/1 dashicons;
+}
+.tablenav .tablenav-pages a:before,
+.tablenav .tablenav-pages .tablenav-pages-navspan:before {
+  color: inherit; /* follow text color so schemes work */
+}
+
+/* Prevent duplicate icons where earlier rules added Unicode on ::after */
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links a.next-page::after,
+.ls-phone-calls .tablenav .tablenav-pages .pagination-links a.last-page::after,
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links a.next-page::after,
+.ls-call-outcomes .tablenav .tablenav-pages .pagination-links a.last-page::after {
+  content: none !important;
+}
+
+/* Simple responsive video */
+.ls-video-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border: 1px solid #dcdcde; border-radius: 6px; background:#000; }
+.ls-video-wrapper iframe, .ls-video-wrapper video { position: absolute; top:0; left:0; width:100%; height:100%; }
+
+/* Phone tracking form styles */
+.leadstream-phone-tracking .form-table th {
+    width: 200px;
+    vertical-align: top;
+    padding-top: 15px;
+}
+
+.leadstream-phone-tracking .form-table td {
+    padding-top: 10px;
+    padding-bottom: 20px;
+}
+
+.leadstream-phone-tracking textarea {
+    width: 100%;
+    max-width: 600px;
+    font-family: 'SFMono-Regular', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    line-height: 1.4;
+    border: 1px solid #8c8f94;
+    border-radius: 4px;
+    padding: 8px 12px;
+}
+
+.leadstream-phone-tracking textarea:focus {
+    border-color: #2271b1;
+    box-shadow: 0 0 0 1px #2271b1;
+    outline: none;
+}
+
+/* Phone tracking stats grid */
+.ls-phone-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.ls-phone-stat-card {
+    text-align: center;
+    padding: 15px;
+    border-radius: 6px;
+    border-left: 4px solid;
+}
+
+.ls-phone-stat-number {
+    font-size: 24px;
+    font-weight: 600;
+    color: #1d2327;
+    margin-bottom: 4px;
+}
+
+.ls-phone-stat-label {
+    font-size: 12px;
+    color: #50575e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Frontend phone tracking elements */
+.ls-phone-tracked {
+    position: relative;
+}
+
+.ls-phone-clicked {
+    animation: ls-phone-flash 0.3s ease-in-out;
+}
+
+@keyframes ls-phone-flash {
+    0% { background-color: transparent; }
+    50% { background-color: rgba(34, 113, 177, 0.1); }
+    100% { background-color: transparent; }
+}
+
+/* Phone tracking help section */
+.ls-phone-help-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.ls-phone-help-card h4 {
+    color: #2271b1;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.ls-phone-help-card ul {
+    margin: 0;
+    color: #50575e;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.ls-phone-help-card li {
+    margin-bottom: 4px;
+}
+
+/* Phone click history table */
+.leadstream-phone-tracking .widefat {
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.leadstream-phone-tracking .widefat th {
+    background: #f6f7f7;
+    border-bottom: 1px solid #c3c4c7;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.leadstream-phone-tracking .widefat td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.leadstream-phone-tracking .widefat td code {
+    background: #f6f7f7;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+    color: #646970;
+}
+
+/* Responsive adjustments for phone tracking */
+@media (max-width: 782px) {
+    .ls-phone-stats-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
+    .ls-phone-help-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .leadstream-phone-tracking .form-table th,
+    .leadstream-phone-tracking .form-table td {
+        display: block;
+        width: 100%;
+        padding: 10px 0;
+    }
+    
+    .leadstream-phone-tracking .form-table th {
+        border-bottom: none;
+    }
+}
+
+/* ==============================================
+   PRETTY LINKS LIST TABLE - PAGINATION STYLES
+   ============================================== */
+.ls-links-table .tablenav .tablenav-pages {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ls-links-table .tablenav .tablenav-pages .pagination-links a,
+.ls-links-table .tablenav .tablenav-pages .pagination-links span.current {
+  border: 1px solid #c3c4c7;
+  background: #fff;
+  color: #1d2327;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-decoration: none;
+}
+.ls-links-table .tablenav .tablenav-pages .pagination-links a:hover {
+  background: #f0f6fc;
+  border-color: #8c8f94;
+}
+.ls-links-table .tablenav .tablenav-pages .pagination-links .tablenav-pages-navspan,
+.ls-links-table .tablenav .tablenav-pages .pagination-links a.first-page,
+.ls-links-table .tablenav .tablenav-pages .pagination-links a.prev-page,
+.ls-links-table .tablenav .tablenav-pages .pagination-links a.next-page,
+.ls-links-table .tablenav .tablenav-pages .pagination-links a.last-page {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+}
+.ls-links-table .tablenav .tablenav-pages .pagination-links a.first-page::before { content: "⏮"; }
+.ls-links-table .tablenav .tablenav-pages .pagination-links a.prev-page::before  { content: "◀"; }
+.ls-links-table .tablenav .tablenav-pages .pagination-links a.next-page::before  { content: "▶"; }
+.ls-links-table .tablenav .tablenav-pages .pagination-links a.last-page::before  { content: "⏭"; }
+.ls-links-table .tablenav .tablenav-pages .displaying-num {
+  color: #646970;
+}
+.ls-links-table .tablenav .actions input[type="date"],
+.ls-links-table .tablenav .actions input[type="text"],
+.ls-links-table .tablenav .actions input[type="number"],
+.ls-links-table .tablenav .actions select {
+  height: 28px;
+}
