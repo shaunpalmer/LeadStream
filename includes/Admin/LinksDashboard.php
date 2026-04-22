@@ -21,9 +21,11 @@ class LinksDashboard extends \WP_List_Table {
         // Only handle form submissions - no separate menu needed
         add_action('admin_post_add_pretty_link', [__CLASS__, 'handle_add_pretty_link']);
         add_action('admin_post_edit_pretty_link', [__CLASS__, 'handle_edit_pretty_link']);
+        add_action('admin_post_delete_pretty_link', [__CLASS__, 'handle_delete_pretty_link']);
         add_action('admin_post_ls_export_links', [__CLASS__, 'handle_export_links']);
-    // AJAX fragment for list table (Pretty Links)
-    add_action('wp_ajax_ls_links_table', [__CLASS__, 'ajax_links_table']);
+        
+        // AJAX fragment for list table (Pretty Links)
+        add_action('wp_ajax_ls_links_table', [__CLASS__, 'ajax_links_table']);
     }
 
     /**
@@ -162,7 +164,38 @@ class LinksDashboard extends \WP_List_Table {
             
             case 'last_click':
                 return $item->last_click ? date_i18n('M j, Y g:i A', strtotime($item->last_click)) : '—';
+            
+            case 'created_at':
+                return $item->created_at ? date_i18n('M j, Y', strtotime($item->created_at)) : '—';
+            
+            case 'actions':
+                return $this->column_actions($item);
         }
+    }
+    
+    /**
+     * Render actions column with Edit and Delete links
+     */
+    public function column_actions($item) {
+        $edit_url = admin_url(sprintf(
+            'admin.php?page=leadstream-analytics-injector&tab=links&action=edit&id=%d',
+            $item->id
+        ));
+        
+        $delete_url = wp_nonce_url(
+            admin_url(sprintf(
+                'admin-post.php?action=delete_pretty_link&id=%d',
+                $item->id
+            )),
+            'delete_link_' . $item->id
+        );
+        
+        return sprintf(
+            '<a href="%s" class="button button-small">Edit</a> ' .
+            '<a href="%s" class="button button-small delete-link-btn ls-delete-btn">Delete</a>',
+            esc_url($edit_url),
+            esc_url($delete_url)
+        );
     }
 
     public function no_items() {
@@ -430,6 +463,53 @@ class LinksDashboard extends \WP_List_Table {
         );
 
         wp_redirect(admin_url('admin.php?page=leadstream-analytics-injector&tab=links&message=updated'));
+        exit;
+    }
+    
+    /**
+     * Handle deleting pretty link
+     */
+    public static function handle_delete_pretty_link() {
+        // Validate and sanitize the link ID first
+        $id = isset($_GET['id']) ? absint($_GET['id']) : 0;
+        
+        if (!$id) {
+            wp_die('Invalid link ID');
+        }
+        
+        // Verify nonce (now that we have a valid ID)
+        if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'delete_link_' . $id)) {
+            wp_die('Security check failed');
+        }
+
+        if (!current_user_can('manage_options')) {
+            wp_die('Permission denied');
+        }
+
+        global $wpdb;
+        
+        // Attempt to delete the link
+        $result = $wpdb->delete(
+            $wpdb->prefix . 'ls_links',
+            ['id' => $id],
+            ['%d']
+        );
+
+        // Check result: false = error, 0 = no rows deleted, >0 = success
+        if ($result === false) {
+            // Database error occurred
+            wp_redirect(admin_url('admin.php?page=leadstream-analytics-injector&tab=links&error=delete_failed'));
+            exit;
+        }
+        
+        if ($result === 0) {
+            // No rows deleted - link doesn't exist
+            wp_redirect(admin_url('admin.php?page=leadstream-analytics-injector&tab=links&error=link_not_found'));
+            exit;
+        }
+
+        // Successfully deleted
+        wp_redirect(admin_url('admin.php?page=leadstream-analytics-injector&tab=links&deleted=1'));
         exit;
     }
 }

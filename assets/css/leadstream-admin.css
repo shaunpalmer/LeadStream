@@ -619,3 +619,12 @@
 .ls-links-table .tablenav .actions select {
   height: 28px;
 }
+
+/* Delete button styling */
+.ls-delete-btn {
+  color: #b32d2e !important;
+}
+
+.ls-delete-btn:hover {
+  color: #8a1f1f !important;
+}
