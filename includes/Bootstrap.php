@@ -31,6 +31,7 @@ class Bootstrap
         'Admin/Settings',
     'Admin/DashboardAdmin',
         'Admin/LinksDashboard',
+        'Admin/EmailNotifications',
         'Repository/LinksRepository',
         'Export/Exporters',
         'AJAX/UTMHandler',
@@ -238,6 +239,11 @@ class Bootstrap
             if (class_exists('LS\\REST\\CallsWebhook')) {
                 \LS\REST\CallsWebhook::init();
             }
+        }
+        
+        // Initialize email notifications (works in both admin and frontend)
+        if (class_exists('LS\\Admin\\EmailNotifications')) {
+            \LS\Admin\EmailNotifications::init();
         }
 
         // Initialize legacy components
