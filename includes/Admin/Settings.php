@@ -2251,7 +2251,19 @@ document.addEventListener('wpformsSubmit', function (event) {
 
 			// Sticky Call Bar settings
 			$callbar_enabled = isset( $_POST['leadstream_callbar_enabled'] ) ? 1 : 0;
-			update_option( 'leadstream_callbar_enabled', $callbar_enabled );
+			update_option( 'leadstream_callbar_enabled', $callbar_enabled );			
+			// Save badge mode
+			$badge_mode = isset( $_POST['leadstream_badge_mode'] )
+				? sanitize_text_field( wp_unslash( $_POST['leadstream_badge_mode'] ) )
+				: 'dot';
+
+			$badge_mode = strtolower( trim( $badge_mode ) );
+
+			if ( ! in_array( $badge_mode, array( 'dot', 'text', 'off' ), true ) ) {
+				$badge_mode = 'dot';
+			}
+				update_option( 'leadstream_badge_mode', $badge_mode );						
+			
 			$callbar_default = sanitize_text_field( $_POST['leadstream_callbar_default'] ?? '' );
 			// Trim to 24 chars server-side
 			if ( strlen( $callbar_default ) > 24 ) {

@@ -73,19 +73,6 @@
     }
 
     // Classic WP style: LS_* maps to class-ls-*.php in subfolders we know
-    // TODO [AUTO-001]: Case-sensitivity hazard — the autoloader builds the slug with
-    // strtolower(), so 'LS_Cookies' becomes 'class-ls-cookies.php'. On a Linux
-    // (case-sensitive) filesystem the actual files are named 'class-LS-Cookies.php'
-    // (uppercase LS). They will NEVER be found by this autoloader. LS_Cookies must
-    // either be renamed to 'class-ls-cookies.php' (lowercase) OR be loaded with an
-    // explicit require_once before the class is first used.
-    //
-    // TODO [AUTO-002]: Even if the filename case issue is fixed, both
-    // includes/class-LS-Cookies.php AND includes/Tracking/class-LS-Cookies.php define
-    // the same global class 'LS_Cookies'. If both are somehow loaded, PHP will throw a
-    // fatal "Cannot declare class LS_Cookies" redeclaration error. Only one copy should
-    // exist. The root copy (includes/class-LS-Cookies.php) is also truncated — see
-    // TODO [COOKIE-001] in that file.
     if (strpos($class, 'LS_') === 0) {
         $slug = 'class-' . strtolower(str_replace('_', '-', $class)) . '.php';
         $paths = [

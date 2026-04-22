@@ -99,7 +99,14 @@ class Bootstrap
      * Initialize the plugin
      */
     public static function init(): void
-    {
+    { 
+        static $initialized = false;
+
+    if ($initialized) {
+        return;
+    }
+    $initialized = true;
+
         // Load autoloader first
         self::load_autoloader();
 

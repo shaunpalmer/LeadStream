@@ -163,40 +163,97 @@ JS;
      * - Enable/disable with filter: add_filter('leadstream_enable_badge', '__return_false');
      * - Override href/tip via filters: 'leadstream_badge_href', 'leadstream_badge_tip'.
      */
-    public static function inject_ls_badge() {
-    // Paid-version stubs: any of these will suppress the badge automatically
-    if (defined('LEADSTREAM_PRO') && LEADSTREAM_PRO) { return; }
-    if (apply_filters('leadstream_is_paid', false)) { return; }
-    if ((bool) get_option('leadstream_paid_stub', false)) { return; }
+   public static function inject_ls_badge() {
+	// Paid-version stubs: any of these will suppress the badge automatically
+	if ( defined( 'LEADSTREAM_PRO' ) && LEADSTREAM_PRO ) { return; }
+	if ( apply_filters( 'leadstream_is_paid', false ) ) { return; }
+	if ( (bool) get_option( 'leadstream_paid_stub', false ) ) { return; }
 
-    // Allow theme/site to opt-out explicitly (free builds can still override)
-    $enabled = apply_filters('leadstream_enable_badge', true);
-    if (!$enabled) { return; }
+	// Back-compat: allow theme/site to opt-out explicitly
+	$enabled = apply_filters( 'leadstream_enable_badge', true );
+	if ( ! $enabled ) { return; }
 
-        $href = apply_filters('leadstream_badge_href', 'https://projectstudios.co.nz/');
-        $tip  = apply_filters('leadstream_badge_tip', 'Powered by LeadStream • LS');
+	/**
+	 * Badge mode:
+	 * - dot  (default): subtle dot
+	 * - text          : "Powered by LeadStream"
+	 * - off           : no badge
+	 *
+	 * Option: leadstream_badge_mode (dot|text|off)
+	 * Filter: leadstream_badge_mode (override)
+	 */
+	$saved_mode = get_option( 'leadstream_badge_mode', 'dot' );
+	$mode = apply_filters( 'leadstream_badge_mode', $saved_mode );
+	$mode = is_string( $mode ) ? strtolower( trim( $mode ) ) : 'dot';
 
-    // Build tiny JS via HEREDOC to avoid quoting issues
-    $href_js = wp_json_encode($href);
-    $tip_js  = wp_json_encode($tip);
-    $js = <<<JS
+	if ( ! in_array( $mode, array( 'dot', 'text', 'off' ), true ) ) {
+		$mode = 'dot';
+	}
+
+	if ( 'off' === $mode ) { return; }
+
+	$href = apply_filters( 'leadstream_badge_href', 'https://projectstudios.co.nz/' );
+	$tip  = apply_filters( 'leadstream_badge_tip', 'Powered by LeadStream • LS' );
+
+	$href_js = wp_json_encode( $href );
+	$tip_js  = wp_json_encode( $tip );
+	$mode_js = wp_json_encode( $mode );
+
+	$js = <<<JS
 (function LSBadge(){
   var HREF = {$href_js};
   var TIP  = {$tip_js};
-    var css = ".ls-dot{display:inline-block;position:relative;width:10px;height:10px;border-radius:50%;background:#111;opacity:.6;vertical-align:middle;margin-left:6px;cursor:pointer}"
-      + ".ls-dot:hover{opacity:.9}"
-      + ".ls-dot[data-tip]:hover:after{content:attr(data-tip);position:absolute;bottom:140%;left:50%;transform:translateX(-50%);white-space:nowrap;background:#111;color:#fff;font:500 11px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial;padding:4px 6px;border-radius:6px;pointer-events:none;opacity:.95}"
-                    + ".ls-ns{position:absolute;left:-9999px}"
-                    + ".ls-dot.ls-center{display:block;margin:8px auto 0 auto}";
-  try { var style=document.createElement("style"); style.textContent=css; (document.head||document.documentElement).appendChild(style); } catch(e){}
-    var a=document.createElement("a"); a.href=HREF; a.target="_blank"; a.rel="dofollow noopener"; a.className="ls-dot ls-center"; a.setAttribute("data-tip",TIP); a.setAttribute("aria-label",TIP);
-  a.innerHTML = "<svg width=\"10\" height=\"10\" viewBox=\"0 0 10 10\" aria-hidden=\"true\" focusable=\"false\"><circle cx=\"5\" cy=\"5\" r=\"5\" fill=\"currentColor\"/></svg><span class=\"ls-ns\">LS</span>";
-    var tgt = (document.querySelector("footer") || document.body);
-    if (tgt) { tgt.appendChild(a); }
-  var ns = document.createElement("noscript"); ns.innerHTML = "<a href=\"" + HREF.replace(/\"/g,"&quot;") + "\" rel=\"dofollow\">Powered by LeadStream</a>"; (document.querySelector("footer")||document.body).appendChild(ns);
+  var MODE = {$mode_js};
+
+  if (window.LS_badge_injected) return;
+  window.LS_badge_injected = true;
+
+  var css =
+    ".ls-badge{display:inline-flex;align-items:center;justify-content:center;position:relative;vertical-align:middle;cursor:pointer;text-decoration:none}" +
+    ".ls-badge:hover{opacity:.9}" +
+    ".ls-badge[data-tip]:hover:after{content:attr(data-tip);position:absolute;bottom:140%;left:50%;transform:translateX(-50%);white-space:nowrap;background:#111;color:#fff;padding:6px 8px;border-radius:6px;font:500 11px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;z-index:99999}" +
+    ".ls-badge__ns{position:absolute;left:-9999px}" +
+    ".ls-badge--center{display:flex;margin:8px auto 0 auto;max-width:max-content}" +
+    ".ls-badge--dot{width:10px;height:10px;border-radius:50%;background:#111;opacity:.6;margin-left:6px}" +
+    ".ls-badge--text{font:600 12px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111;opacity:.7;padding:2px 6px;border-radius:4px}" +
+    ".ls-badge--text:hover{text-decoration:underline}";
+
+  try {
+    var style = document.createElement("style");
+    style.textContent = css;
+    (document.head || document.documentElement).appendChild(style);
+  } catch(e){}
+
+  var a = document.createElement("a");
+  a.href = HREF;
+  a.target = "_blank";
+  a.rel = "dofollow noopener";
+  a.setAttribute("data-tip", TIP);
+  a.setAttribute("aria-label", TIP);
+  a.className = "ls-badge ls-badge--center";
+
+  if (MODE === "text") {
+    a.className += " ls-badge--text";
+    a.textContent = "Powered by LeadStream";
+  } else {
+    a.className += " ls-badge--dot";
+    a.innerHTML =
+      "<svg width=\\"10\\" height=\\"10\\" viewBox=\\"0 0 10 10\\" aria-hidden=\\"true\\" focusable=\\"false\\">" +
+      "<circle cx=\\"5\\" cy=\\"5\\" r=\\"5\\" fill=\\"currentColor\\"/></svg>" +
+      "<span class=\\"ls-badge__ns\\">LS</span>";
+  }
+
+  var tgt = (document.querySelector("footer") || document.body);
+  if (tgt) { tgt.appendChild(a); }
+
+  try {
+    var ns = document.createElement("noscript");
+    ns.innerHTML = "<a href=\\"" + HREF.replace(/"/g, "&quot;") + "\\" rel=\\"dofollow\\">Powered by LeadStream</a>";
+    (document.querySelector("footer") || document.body).appendChild(ns);
+  } catch(e){}
 })();
 JS;
 
-    echo "<script>{$js}</script>\n";
-    }
+	echo "<script>{$js}</script>\n";
+}
 }
